@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Assurez-vous d'importer vos CSS ici si ce n'est pas fait dynamiquement -->
+  </head>
+  <body>
+    <!-- Scripts -->
+    <script src="../static/js/locales.js"></script>
+
+    <div class="container" id="container">
+      <!-- Sidebar -->
+      <nav class="sidebar">
+        <div class="sidebar-section">
+          <div
+            class="sidebar-item active"
+            data-target="home"
+            role="button"
+            tabindex="0"
+          >
+            <div class="sidebar-icon">
+              <img
+                src="../static/img/icons/home.png"
+                class="icon-default"
+                alt=""
+              />
+              <img
+                src="../static/img/icons/home-active.png"
+                class="icon-active"
+                alt=""
+              />
+            </div>
+            <span data-i18n="sidebar_home">Accueil</span>
+          </div>
+
+          <div
+            class="sidebar-item"
+            data-target="general"
+            role="button"
+            tabindex="0"
+          >
+            <div class="sidebar-icon">
+              <img
+                src="../static/img/icons/setting.png"
+                class="icon-default"
+                alt=""
+              />
+              <img
+                src="../static/img/icons/setting-active.png"
+                class="icon-active"
+                alt=""
+              />
+            </div>
+            <span data-i18n="sidebar_general">Général</span>
+          </div>
+
+          <div
+            class="sidebar-item"
+            data-target="history"
+            role="button"
+            tabindex="0"
+          >
+            <div class="sidebar-icon">
+              <img
+                src="../static/img/icons/bookmark.png"
+                class="icon-default"
+                alt=""
+              />
+              <img
+                src="../static/img/icons/bookmark-active.png"
+                class="icon-active"
+                alt=""
+              />
+            </div>
+            <span data-i18n="sidebar_history">Historique</span>
+          </div>
+
+          <div
+            class="sidebar-item"
+            data-target="replacement"
+            role="button"
+            tabindex="0"
+          >
+            <div class="sidebar-icon">
+              <img
+                src="../static/img/icons/swap.png"
+                class="icon-default"
+                alt=""
+              />
+              <img
+                src="../static/img/icons/swap-active.png"
+                class="icon-active"
+                alt=""
+              />
+            </div>
+            <span data-i18n="sidebar_replacement">Remplacer</span>
+          </div>
+
+          <div
+            class="sidebar-item"
+            data-target="agent"
+            role="button"
+            tabindex="0"
+          >
+            <div class="sidebar-icon">
+              <img
+                src="../static/img/icons/agent.png"
+                class="icon-default"
+                alt=""
+              />
+              <img
+                src="../static/img/icons/agent-active.png"
+                class="icon-active"
+                alt=""
+              />
+            </div>
+            <span data-i18n="sidebar_agent">Agent</span>
+          </div>
+
+          <div
+            class="sidebar-item hidden-by-default"
+            id="logs-sidebar-tab"
+            data-target="logs"
+            role="button"
+            tabindex="0"
+          >
+            <div class="sidebar-icon">
+              <img
+                src="../static/img/icons/dev.png"
+                class="icon-default"
+                alt=""
+              />
+              <img
+                src="../static/img/icons/dev-active.png"
+                class="icon-active"
+                alt=""
+              />
+            </div>
+            <span data-i18n="sidebar_logs">Logs</span>
+          </div>
+        </div>
+
+        <div class="sidebar-bottom-container">
+          <div
+            id="update-app-sidebar-button"
+            class="sidebar-item-update hidden-by-default"
+            role="button"
+            tabindex="0"
+          >
+            <span
+              class="button-text"
+              style="color: #373737"
+              data-i18n="sidebar_update"
+              >Mettre à jour</span
+            >
+          </div>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- Home Section -->
+        <section class="settings-section" id="home">
+          <div class="settings-header" style="font-weight: 800">Ozmoz</div>
+          <div class="dashboard-container">
+            <div class="dashboard-stats-row">
+              <div class="dashboard-stat-card">
+                <div class="stat-content">
+                  <div class="stat-value" id="active-agents">0</div>
+                  <div class="stat-label" data-i18n="dash_dictated_words">
+                    🚀 Mots dictés
+                  </div>
+                </div>
+              </div>
+              <div class="dashboard-stat-card">
+                <div class="stat-content">
+                  <div class="stat-value" id="total-transcriptions">0</div>
+                  <div class="stat-label" data-i18n="dash_avg_speed">
+                    ⚡ Vitesse moyenne
+                  </div>
+                </div>
+              </div>
+              <div class="dashboard-stat-card">
+                <div class="stat-content">
+                  <div class="stat-value" id="total-replacements">0</div>
+                  <div class="stat-label" data-i18n="dash_time_saved">
+                    🏆 Temps économisé
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="dashboard-chart-container">
+              <div class="chart-header">
+                <h4 data-i18n="dash_activity">Aperçu de l'activité</h4>
+                <div class="chart-controls">
+                  <div class="dashboard-period-segmented-control">
+                    <input type="checkbox" id="dashboard-period-toggle" />
+                    <label
+                      for="dashboard-period-toggle"
+                      class="dashboard-period-label"
+                      data-on-key="dash_7_days"
+                      data-off-key="dash_30_days"
+                      data-on="7 Jours"
+                      data-off="30 Jours"
+                    ></label>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-body" id="activity-chart">
+                <canvas id="activity-chart-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- General Section -->
+        <section class="settings-section" id="general">
+          <div class="settings-header" data-i18n="header_settings">
+            Paramètres généraux
+          </div>
+
+          <div class="internal-tabs" role="tablist">
+            <div
+              class="internal-tab active"
+              data-tab="preferences"
+              data-i18n="tab_preferences"
+              role="tab"
+              tabindex="0"
+            >
+              Préférences
+            </div>
+            <div
+              class="internal-tab"
+              data-tab="controls"
+              data-i18n="tab_controls"
+              role="tab"
+              tabindex="0"
+            >
+              Contrôles
+            </div>
+            <div
+              class="internal-tab"
+              data-tab="api"
+              data-i18n="tab_api"
+              role="tab"
+              tabindex="0"
+            >
+              Clés API
+            </div>
+          </div>
+
+          <!-- Preferences Tab -->
+          <div class="internal-tab-content active" id="preferences-content">
+            <div class="setting-item">
+              <label for="model-select" class="setting-label">
+                <span data-i18n="lbl_model_ai">Modèle d'IA</span>
+                <span class="tooltip-container">
+                  <span class="help-icon" aria-hidden="true">?</span>
+                  <span class="tooltip-text" data-i18n="tooltip_model_ai">
+                    Choisissez le modèle qui correspond à votre besoin en
+                    fonction de leurs points forts inscrits à droite
+                  </span>
+                </span>
+              </label>
+              <span class="setting-description" data-i18n="desc_model_ai">
+                Choisissez le modèle d'intelligence artificielle pour le
+                traitement.
+              </span>
+              <div
+                class="custom-select-container"
+                id="custom-model-select-container"
+              >
+                <select id="model-select">
+                  <option value="" disabled selected data-i18n="loading_models">
+                    Chargement des modèles...
+                  </option>
+                </select>
+                <div class="select-selected" id="model-select-selected"></div>
+                <div
+                  class="select-items select-hide"
+                  id="model-select-items"
+                ></div>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <label for="audio-model-select" class="setting-label">
+                <span data-i18n="lbl_model_audio"
+                  >Modèle de Transcription Audio</span
+                >
+                <span class="tooltip-container">
+                  <span class="help-icon" aria-hidden="true">?</span>
+                  <span class="tooltip-text" data-i18n="tooltip_model_audio">
+                    Choisissez entre la rapidité et la précision sur des mots
+                    plus spécialisés
+                  </span>
+                </span>
+              </label>
+              <span class="setting-description" data-i18n="desc_model_audio">
+                Choisissez le modèle pour la conversion audio-texte.
+              </span>
+              <div
+                class="custom-select-container"
+                id="custom-audio-model-select-container"
+              >
+                <select id="audio-model-select">
+                  <option value="" disabled selected data-i18n="loading_models">
+                    Chargement des modèles...
+                  </option>
+                </select>
+                <div
+                  class="select-selected"
+                  id="audio-model-select-selected"
+                ></div>
+                <div
+                  class="select-items select-hide"
+                  id="audio-model-select-items"
+                ></div>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <label
+                for="language-select"
+                class="setting-label"
+                data-i18n="lbl_lang"
+                >Langue de transcription</label
+              >
+              <span class="setting-description" data-i18n="desc_lang">
+                Sélectionnez la langue principale (Interface & Transcription).
+              </span>
+              <div
+                class="custom-select-container"
+                id="custom-language-select-container"
+              >
+                <select id="language-select"></select>
+                <div class="select-selected" id="language-select-selected">
+                  <span data-i18n="loading_langs"
+                    >Chargement des langues...</span
+                  >
+                </div>
+                <div
+                  class="select-items select-hide"
+                  id="language-select-items"
+                ></div>
+              </div>
+            </div>
+
+            <div class="settings-group-header" data-i18n="group_interface">
+              Interface
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-row">
+                <div class="setting-text-container">
+                  <label
+                    class="setting-label"
+                    style="margin-left: 5px"
+                    for="toggle-chart-type"
+                    data-i18n="lbl_chart_type"
+                  >
+                    Afficher les statistiques sous forme de courbes
+                  </label>
+                </div>
+                <div class="toggle-switch">
+                  <input
+                    class="toggle-input"
+                    id="toggle-chart-type"
+                    type="checkbox"
+                  />
+                  <label class="toggle-label" for="toggle-chart-type"></label>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-row">
+                <div class="setting-text-container">
+                  <label
+                    class="setting-label"
+                    style="margin-left: 5px"
+                    for="toggle-dev-mode"
+                    data-i18n="lbl_dev_mode"
+                  >
+                    Mode développeur
+                  </label>
+                </div>
+                <div class="toggle-switch">
+                  <input
+                    class="toggle-input"
+                    id="toggle-dev-mode"
+                    type="checkbox"
+                  />
+                  <label class="toggle-label" for="toggle-dev-mode"></label>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-group-header" data-i18n="group_audio">
+              Audio
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-row">
+                <div class="setting-text-container">
+                  <label
+                    class="setting-label"
+                    style="margin-left: 5px"
+                    for="toggle-sound"
+                    data-i18n="lbl_sounds"
+                  >
+                    Sons d'interaction
+                  </label>
+                </div>
+                <div class="toggle-switch">
+                  <input
+                    class="toggle-input"
+                    id="toggle-sound"
+                    type="checkbox"
+                  />
+                  <label class="toggle-label" for="toggle-sound"></label>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-row">
+                <div class="setting-text-container">
+                  <label
+                    class="setting-label"
+                    style="margin-left: 5px"
+                    for="toggle-mute"
+                    data-i18n="lbl_mute"
+                  >
+                    Couper le son pendant l'utilisation
+                  </label>
+                </div>
+                <div class="toggle-switch">
+                  <input
+                    class="toggle-input"
+                    id="toggle-mute"
+                    type="checkbox"
+                  />
+                  <label class="toggle-label" for="toggle-mute"></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Controls Tab -->
+          <div class="internal-tab-content" id="controls-content">
+            <div class="setting-item">
+              <!-- Visibility Hotkey -->
+              <div class="hotkey-row">
+                <span class="hotkey-name" data-i18n="hk_visibility"
+                  >Afficher/masquer l'onglet</span
+                >
+                <div style="display: flex; align-items: center">
+                  <span
+                    class="hotkey-value"
+                    id="hotkey-display-toggle_visibility"
+                    >...</span
+                  >
+                  <button
+                    class="button-secondary hotkey-edit-btn"
+                    data-action="toggle_visibility"
+                    data-i18n="btn_modify"
+                  >
+                    Modifier
+                  </button>
+                </div>
+              </div>
+
+              <!-- Record Hotkey -->
+              <div class="hotkey-row">
+                <span class="hotkey-name" data-i18n="hk_record"
+                  >Démarrer/Arrêter l'enregistrement</span
+                >
+                <div style="display: flex; align-items: center">
+                  <span class="hotkey-value" id="hotkey-display-record_toggle"
+                    >...</span
+                  >
+                  <button
+                    class="button-secondary hotkey-edit-btn"
+                    data-action="record_toggle"
+                    data-i18n="btn_modify"
+                  >
+                    Modifier
+                  </button>
+                </div>
+              </div>
+
+              <!-- AI Hotkey -->
+              <div class="hotkey-row">
+                <span class="hotkey-name" data-i18n="hk_ai"
+                  >Génération IA (Appuyer/Maintenir)</span
+                >
+                <div style="display: flex; align-items: center">
+                  <span class="hotkey-value" id="hotkey-display-ai_toggle"
+                    >...</span
+                  >
+                  <button
+                    class="button-secondary hotkey-edit-btn"
+                    data-action="ai_toggle"
+                    data-i18n="btn_modify"
+                  >
+                    Modifier
+                  </button>
+                </div>
+              </div>
+
+              <!-- Web Search Hotkey -->
+              <div class="hotkey-row">
+                <span class="hotkey-name" data-i18n="hk_web"
+                  >Recherche Web (Appuyer/Maintenir)</span
+                >
+                <div style="display: flex; align-items: center">
+                  <span
+                    class="hotkey-value"
+                    id="hotkey-display-web_search_toggle"
+                    >...</span
+                  >
+                  <button
+                    class="button-secondary hotkey-edit-btn"
+                    data-action="web_search_toggle"
+                    data-i18n="btn_modify"
+                  >
+                    Modifier
+                  </button>
+                </div>
+              </div>
+
+              <!-- Vision Hotkey -->
+              <div class="hotkey-row">
+                <span class="hotkey-name" data-i18n="hk_vision"
+                  >Vision de l'écran (Appuyer/Maintenir)</span
+                >
+                <div style="display: flex; align-items: center">
+                  <span
+                    class="hotkey-value"
+                    id="hotkey-display-screen_vision_toggle"
+                    >...</span
+                  >
+                  <button
+                    class="button-secondary hotkey-edit-btn"
+                    data-action="screen_vision_toggle"
+                    data-i18n="btn_modify"
+                  >
+                    Modifier
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hotkey Modal (Hidden) -->
+          <div
+            class="modal-backdrop hotkey-modal"
+            id="hotkey-modal-backdrop"
+            aria-hidden="true"
+            style="display: none"
+          >
+            <div
+              class="hotkey-capture-modal"
+              id="hotkey-modal-dialog"
+              role="dialog"
+              aria-modal="true"
+            >
+              <h3>
+                <span data-i18n="modal_hotkey_title"
+                  >Modifier le raccourci :</span
+                >
+                <span id="hotkey-action-name-display"></span>
+              </h3>
+              <p data-i18n="modal_hotkey_desc">
+                Appuyez sur la combinaison de touches souhaitée (ex: Ctrl+Alt+X)
+              </p>
+              <div
+                class="hotkey-display-area placeholder"
+                id="captured-hotkey-display"
+                data-i18n="modal_waiting"
+              >
+                En attente de saisie...
+              </div>
+              <div
+                id="hotkey-modal-feedback"
+                class="form-feedback"
+                style="display: none; margin-bottom: 16px"
+              ></div>
+              <input type="hidden" id="hotkey-modal-action-name" value="" />
+              <div class="hotkey-modal-buttons">
+                <button
+                  class="button"
+                  id="hotkey-modal-cancel-btn"
+                  style="justify-content: center"
+                  data-i18n="btn_cancel"
+                >
+                  Annuler
+                </button>
+                <button
+                  class="button primary"
+                  id="hotkey-modal-save-btn"
+                  style="justify-content: center"
+                  disabled
+                  data-i18n="btn_save"
+                >
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- API Keys Tab -->
+          <div class="internal-tab-content" id="api-content">
+            <div class="api-wrapper">
+              <!-- Audio Processing Section -->
+              <div class="api-card">
+                <div class="api-header">
+                  <div class="api-icon-bg audio">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"
+                      />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </svg>
+                  </div>
+                  <div class="api-title-group">
+                    <h3 data-i18n="api_title_audio">Traitement Audio</h3>
+                    <p data-i18n="api_desc_audio">
+                      Transcription vocale (STT). Entrer la clé Groq permet
+                      d'utiliser les modèles whisper et Deepgram pour nova.
+                    </p>
+                  </div>
+                  <div
+                    class="api-status-indicator"
+                    id="status-audio"
+                    title="Statut"
+                  ></div>
+                </div>
+
+                <div class="api-inputs">
+                  <div class="input-group-api">
+                    <label for="api-key-groq-audio">Groq API</label>
+                    <div class="input-wrapper">
+                      <input
+                        type="password"
+                        id="api-key-groq-audio"
+                        class="api-input"
+                        placeholder="gsk_..."
+                      />
+                      <div class="input-focus-border"></div>
+                    </div>
+                  </div>
+
+                  <div class="api-separator"><span>ET / OU</span></div>
+
+                  <div class="input-group-api">
+                    <label for="api-key-deepgram">Deepgram API</label>
+                    <div class="input-wrapper">
+                      <input
+                        type="password"
+                        id="api-key-deepgram"
+                        class="api-input"
+                        placeholder="Token Deepgram..."
+                      />
+                      <div class="input-focus-border"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AI Section -->
+              <div class="api-card">
+                <div class="api-header">
+                  <div class="api-icon-bg ai">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"
+                      />
+                      <path
+                        d="M12 16a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2z"
+                      />
+                      <path
+                        d="M2 12a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"
+                      />
+                      <path
+                        d="M16 12a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"
+                      />
+                      <path d="M12 8v8" />
+                      <path d="M8 12h8" />
+                    </svg>
+                  </div>
+                  <div class="api-title-group">
+                    <h3 data-i18n="api_title_ai">Génération IA</h3>
+                    <p data-i18n="api_desc_ai">
+                      Intelligence artificielle (LLM). Entrer les clés pour
+                      utiliser les modèles spécifiques.
+                    </p>
+                  </div>
+                  <div
+                    class="api-status-indicator"
+                    id="status-ai"
+                    title="Statut"
+                  ></div>
+                </div>
+
+                <div class="api-inputs">
+                  <div class="input-group-api">
+                    <label for="api-key-groq-ai">Groq API</label>
+                    <div class="input-wrapper">
+                      <input
+                        type="password"
+                        id="api-key-groq-ai"
+                        class="api-input"
+                        placeholder="gsk_..."
+                      />
+                      <div class="input-focus-border"></div>
+                    </div>
+                  </div>
+
+                  <div class="api-separator"><span>ET / OU</span></div>
+
+                  <div class="input-group-api">
+                    <label for="api-key-cerebras">Cerebras API</label>
+                    <div class="input-wrapper">
+                      <input
+                        type="password"
+                        id="api-key-cerebras"
+                        class="api-input"
+                        placeholder="csk_..."
+                      />
+                      <div class="input-focus-border"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="api-actions">
+              <button
+                class="button primary"
+                id="save-api-keys-btn"
+                data-i18n="btn_save_keys"
+              >
+                Sauvegarder les clés
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- History Section -->
+        <section class="settings-section" id="history">
+          <div class="settings-header" data-i18n="header_history">
+            Historique des transcriptions
+          </div>
+
+          <div class="controls-container">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                class="input-field"
+                id="search-transcript"
+                placeholder="Rechercher dans l'historique..."
+                aria-label="Rechercher dans l'historique"
+                data-i18n="[placeholder]ph_search_history"
+              />
+            </div>
+            <div class="filter-container">
+              <div class="history-sort-segmented-control">
+                <input type="checkbox" id="history-sort-toggle" checked />
+                <label
+                  for="history-sort-toggle"
+                  class="history-sort-label"
+                  data-on-key="sort_recent"
+                  data-off-key="sort_old"
+                  data-on="Récents"
+                  data-off="Anciens"
+                >
+                </label>
+              </div>
+            </div>
+            <button class="button clear-history-btn" id="clear-history-btn">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path
+                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                ></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+              </svg>
+              <span data-i18n="btn_clear_history">Effacer l'historique</span>
+            </button>
+          </div>
+
+          <ul class="transcript-list" id="transcript-list"></ul>
+
+          <div
+            class="no-transcripts"
+            id="no-transcripts"
+            style="display: none"
+            data-i18n="no_transcripts"
+          >
+            Aucune transcription trouvée.
+          </div>
+          <div
+            class="empty-search-result"
+            id="empty-search-result"
+            style="display: none"
+            data-i18n="no_results"
+          >
+            Aucun résultat pour votre recherche.
+          </div>
+        </section>
+
+        <!-- Replacement Section -->
+        <section class="settings-section" id="replacement">
+          <div class="settings-header" data-i18n="header_replacement">
+            Remplacement de mots
+          </div>
+          <div class="setting-description" data-i18n="desc_replacement">
+            Créez des remplacements personnalisés appliqués automatiquement.
+          </div>
+
+          <div class="replacement-form">
+            <div class="input-group">
+              <div
+                id="replacement-form-feedback"
+                class="form-feedback"
+                style="display: none"
+              ></div>
+
+              <label
+                for="original-word"
+                class="sr-only"
+                data-i18n="ph_word_origin"
+                >Mot à remplacer</label
+              >
+              <input
+                type="text"
+                id="original-word"
+                class="input-field replacement-input"
+                placeholder="Mot à remplacer"
+                data-i18n="[placeholder]ph_word_origin"
+              />
+
+              <span class="replacement-arrow" aria-hidden="true">→</span>
+
+              <label
+                for="replacement-word"
+                class="sr-only"
+                data-i18n="ph_word_new"
+                >Nouveau mot</label
+              >
+              <input
+                type="text"
+                id="replacement-word"
+                class="input-field replacement-input"
+                placeholder="Nouveau mot"
+                data-i18n="[placeholder]ph_word_new"
+              />
+
+              <button
+                class="button primary add-replacement-btn"
+                id="add-replacement-btn"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span data-i18n="btn_add">Ajouter</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="controls-container">
+            <div class="search-input-wrapper">
+              <label
+                for="filter-replacements"
+                class="sr-only"
+                data-i18n="ph_filter_rep"
+                >Filtrer les remplacements...</label
+              >
+              <input
+                type="text"
+                class="input-field"
+                id="filter-replacements"
+                placeholder="Filtrer les remplacements..."
+                aria-label="Filtrer les remplacements"
+                data-i18n="[placeholder]ph_filter_rep"
+              />
+            </div>
+          </div>
+
+          <div class="replacements-container">
+            <div
+              class="no-replacements"
+              id="no-replacements"
+              style="display: none"
+              data-i18n="no_replacements"
+            >
+              Aucun remplacement défini pour l'instant.
+            </div>
+            <ul class="replacements-list" id="replacements-list"></ul>
+            <div
+              class="empty-search-result"
+              id="empty-replacement-search-result"
+              style="display: none"
+              data-i18n="no_rep_match"
+            >
+              Aucun remplacement ne correspond à votre filtre.
+            </div>
+          </div>
+        </section>
+
+        <!-- Agent Section -->
+        <section class="settings-section" id="agent">
+          <div class="settings-header">
+            <span data-i18n="header_agents">Agents</span>
+            <span
+              id="agent-count-display"
+              style="
+                display: none;
+                font-size: 16px;
+                font-weight: 400;
+                color: var(--color-text-secondary);
+                margin-left: 8px;
+              "
+            ></span>
+          </div>
+          <div class="setting-description" data-i18n="desc_agents">
+            Créez et gérez des agents d'IA.
+          </div>
+
+          <div class="controls-container">
+            <button class="button primary" id="create-agent-btn">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span data-i18n="btn_new_agent">Nouvel agent</span>
+            </button>
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                class="input-field"
+                id="filter-agents"
+                placeholder="Rechercher des agents..."
+                aria-label="Filtrer les agents"
+                data-i18n="[placeholder]ph_search_agent"
+              />
+            </div>
+          </div>
+
+          <div class="agents-container">
+            <div
+              class="no-agents"
+              id="no-agents"
+              style="display: none"
+              data-i18n="no_agents"
+            >
+              Aucun agent défini pour le moment.
+            </div>
+            <div class="agents-list" id="agents-list"></div>
+            <div
+              class="empty-search-result"
+              id="empty-agent-search-result"
+              style="display: none"
+              data-i18n="no_results"
+            >
+              Aucun résultat pour votre recherche.
+            </div>
+          </div>
+        </section>
+
+        <!-- Logs Section -->
+        <section class="settings-section hidden-by-default" id="logs">
+          <div class="settings-header" data-i18n="header_logs">
+            Logs de l'Application
+          </div>
+          <div class="controls-container" style="margin-bottom: 16px">
+            <button class="button" id="refresh-logs-btn">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              <span data-i18n="btn_refresh">Rafraîchir</span>
+            </button>
+            <button class="button" id="export-logs-btn">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span data-i18n="btn_export">Exporter</span>
+            </button>
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                class="input-field"
+                id="log-search-input"
+                placeholder="Rechercher dans les logs..."
+                data-i18n="[placeholder]ph_search_logs"
+              />
+            </div>
+          </div>
+          <div id="log-container-terminal">
+            <div id="log-display-terminal"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Confirm Modal -->
+    <div
+      class="modal-backdrop"
+      id="confirm-modal-backdrop"
+      aria-hidden="true"
+      style="display: none"
+    >
+      <div
+        class="confirm-modal"
+        id="confirm-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+      >
+        <p id="confirm-modal-text" data-i18n="modal_confirm_title">
+          Êtes-vous sûr ?
+        </p>
+        <div class="confirm-buttons">
+          <button
+            class="button confirm-button cancel"
+            id="confirm-modal-cancel"
+            data-i18n="btn_cancel"
+          >
+            Annuler
+          </button>
+          <button
+            class="button primary confirm-button delete"
+            id="confirm-modal-delete"
+            data-i18n="btn_delete"
+          >
+            Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agent Modal -->
+    <div
+      class="modal-backdrop"
+      id="agent-modal-backdrop"
+      aria-hidden="true"
+      style="display: none"
+    >
+      <div
+        class="agent-modal"
+        id="agent-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="agent-modal-header">
+          <h3 id="agent-modal-title" data-i18n="modal_agent_create_title">
+            Créer un nouvel agent
+          </h3>
+          <button class="modal-close-btn" id="close-agent-modal-btn">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="agent-modal-body">
+          <div class="modal-feedback" id="agent-modal-feedback"></div>
+          <input type="hidden" id="agent-edit-id" value="" />
+
+          <div class="setting-item">
+            <label
+              for="agent-name"
+              class="setting-label"
+              data-i18n="lbl_agent_name"
+              >Nom de l'agent</label
+            >
+            <span class="setting-description" data-i18n="desc_agent_name"
+              >Donnez à votre agent un nom descriptif</span
+            >
+            <input
+              type="text"
+              id="agent-name"
+              class="input-field"
+              placeholder="Entrez le nom de l'agent"
+              data-i18n="[placeholder]ph_agent_name"
+            />
+          </div>
+
+          <div class="setting-item">
+            <label
+              for="agent-trigger"
+              class="setting-label"
+              data-i18n="lbl_agent_trigger"
+              >Mot/Phrase d'activation</label
+            >
+            <span class="setting-description" data-i18n="desc_agent_trigger"
+              >Définissez un mot-clé pour déclencher cet agent</span
+            >
+            <input
+              type="text"
+              id="agent-trigger"
+              class="input-field"
+              placeholder="Entrez le mot d'activation (optionnel)"
+              data-i18n="[placeholder]ph_agent_trigger"
+            />
+          </div>
+
+          <div class="setting-item">
+            <label
+              for="agent-model-select"
+              class="setting-label"
+              data-i18n="lbl_model_ai"
+              >Modèle d'IA</label
+            >
+            <span class="setting-description"
+              >Sélectionnez le modèle d'IA pour cet agent.</span
+            >
+            <div
+              class="custom-select-container"
+              id="custom-agent-model-select-container"
+            >
+              <select id="agent-model-select">
+                <option value="" disabled selected data-i18n="loading_models">
+                  Chargement des modèles...
+                </option>
+              </select>
+              <div
+                class="select-selected"
+                id="agent-model-select-selected"
+              ></div>
+              <div
+                class="select-items select-hide"
+                id="agent-model-select-items"
+              ></div>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-row" style="margin-bottom: var(--spacing-lg)">
+              <div class="setting-text-container">
+                <label
+                  class="setting-label"
+                  for="agent-autopaste"
+                  data-i18n="lbl_agent_autopaste"
+                  >Collage Automatique</label
+                >
+                <span
+                  class="setting-description"
+                  data-i18n="desc_agent_autopaste"
+                  >Colle automatiquement la réponse.</span
+                >
+              </div>
+              <div class="toggle-switch">
+                <input
+                  class="toggle-input"
+                  id="agent-autopaste"
+                  type="checkbox"
+                  checked
+                />
+                <label class="toggle-label" for="agent-autopaste"></label>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-text-container">
+                <label
+                  class="setting-label"
+                  for="agent-screen-vision"
+                  data-i18n="lbl_agent_vision"
+                  >Vision de l'écran</label
+                >
+                <span class="setting-description" data-i18n="desc_agent_vision"
+                  >Permet à l'agent de voir votre écran.</span
+                >
+              </div>
+              <div class="toggle-switch">
+                <input
+                  class="toggle-input"
+                  id="agent-screen-vision"
+                  type="checkbox"
+                />
+                <label class="toggle-label" for="agent-screen-vision"></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <label
+              for="agent-prompt"
+              class="setting-label"
+              data-i18n="lbl_agent_prompt"
+              >Instruction système</label
+            >
+            <span class="setting-description" data-i18n="desc_agent_prompt"
+              >Définissez le comportement de l'agent</span
+            >
+            <textarea
+              id="agent-prompt"
+              class="input-field textarea-field"
+              rows="6"
+              placeholder="Entrez les instructions..."
+              data-i18n="[placeholder]ph_agent_prompt"
+            ></textarea>
+          </div>
+        </div>
+        <div class="agent-modal-footer">
+          <button
+            class="button"
+            id="cancel-agent-modal-btn"
+            data-i18n="btn_cancel"
+          >
+            Annuler
+          </button>
+          <button
+            class="button primary"
+            id="save-agent-btn"
+            data-i18n="btn_create_agent"
+          >
+            Créer l'agent
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Agent Modal -->
+    <div
+      class="modal-backdrop"
+      id="delete-agent-modal-backdrop"
+      aria-hidden="true"
+      style="display: none"
+    >
+      <div
+        class="confirm-modal"
+        id="delete-agent-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+      >
+        <input type="hidden" id="agent-delete-id" value="" />
+        <p id="delete-agent-modal-text">
+          Êtes-vous sûr de vouloir supprimer cet agent ?
+        </p>
+        <div class="confirm-buttons">
+          <button
+            class="button confirm-button cancel"
+            id="cancel-delete-agent-btn"
+            data-i18n="btn_cancel"
+          >
+            Annuler
+          </button>
+          <button
+            class="button danger confirm-button delete"
+            id="confirm-delete-agent-btn"
+            data-i18n="btn_delete"
+          >
+            Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Conflict Modal -->
+    <div
+      class="modal-backdrop"
+      id="conflict-modal-backdrop"
+      aria-hidden="true"
+      style="display: none"
+    >
+      <div
+        class="confirm-modal"
+        id="conflict-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+      >
+        <h3
+          style="
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--color-text);
+          "
+        >
+          Fonctionnalité non disponible
+        </h3>
+        <p
+          style="
+            margin-bottom: var(--spacing-lg);
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            line-height: 1.5;
+          "
+        >
+          La Vision de l'écran et la Recherche Web ne peuvent pas être activées
+          en même temps. Veuillez désactiver l'une pour utiliser l'autre.
+        </p>
+        <div class="confirm-buttons">
+          <button
+            class="button primary confirm-button"
+            id="conflict-modal-ok-btn"
+            style="width: 100%"
+          >
+            Compris
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Incompatible Model Modal -->
+    <div
+      class="modal-backdrop"
+      id="incompatible-model-modal-backdrop"
+      aria-hidden="true"
+      style="display: none"
+    >
+      <div
+        class="confirm-modal"
+        id="incompatible-model-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+      >
+        <h3
+          style="
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--color-text);
+          "
+        >
+          Modèle Incompatible
+        </h3>
+        <p
+          id="incompatible-model-modal-text"
+          style="
+            margin-bottom: var(--spacing-lg);
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            line-height: 1.5;
+          "
+        ></p>
+        <div class="confirm-buttons">
+          <button
+            class="button primary confirm-button"
+            id="incompatible-model-ok-btn"
+            style="width: 100%"
+          >
+            Compris
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Missing Key Modal -->
+    <div
+      class="modal-backdrop"
+      id="missing-key-modal-backdrop"
+      aria-hidden="true"
+      style="display: none"
+    >
+      <div
+        class="confirm-modal"
+        id="missing-key-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+      >
+        <h3
+          style="
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--color-text);
+          "
+        >
+          Clé API Manquante
+        </h3>
+        <p
+          id="missing-key-modal-text"
+          style="
+            margin-bottom: var(--spacing-lg);
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            line-height: 1.5;
+          "
+        >
+          Ce modèle nécessite une clé API spécifique.
+        </p>
+        <div class="confirm-buttons">
+          <button
+            class="button primary confirm-button"
+            id="missing-key-add-btn"
+          >
+            Ajouter la clé
+          </button>
+          <button
+            class="button confirm-button cancel"
+            id="missing-key-close-btn"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Update Confirm Modal -->
+    <div
+      class="modal-backdrop"
+      id="update-confirm-modal-backdrop"
+      aria-hidden="true"
+      style="display: none"
+    >
+      <div
+        class="confirm-modal"
+        id="update-confirm-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+      >
+        <h3
+          id="update-confirm-modal-title"
+          style="
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--color-text);
+          "
+        >
+          Mise à jour disponible
+        </h3>
+        <p id="update-confirm-modal-text" style="margin-bottom: 24px">
+          Une nouvelle version est prête à être installée.
+        </p>
+        <div class="confirm-buttons" style="flex-direction: column; gap: 12px">
+          <button
+            class="button confirm-button cancel"
+            id="update-confirm-view-notes"
+            style="width: 100%"
+          >
+            Voir les nouveautés
+          </button>
+          <button
+            class="button primary confirm-button"
+            id="update-confirm-start"
+            style="width: 100%"
+          >
+            Mettre à Jour
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" aria-live="polite"></div>
+  </body>
+</html>
