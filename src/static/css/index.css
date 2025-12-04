@@ -1,0 +1,476 @@
+:root {
+  /* --- Palette --- */
+  --bg-color: #222222;
+  --bg-secondary: #1e1e1e;
+  --bg-code: #282c34;
+  --bg-code-inline: rgba(255, 255, 255, 0.1);
+
+  --text-main: #e0e0e0;
+  --text-inverse: rgb(0, 0, 0);
+  --text-muted: rgba(255, 255, 255, 0.5);
+  --text-white: #ffffff;
+
+  --accent-red: #ff3b30;
+  --accent-blue: #64b5f6;
+  --accent-blue-hover: #9be7ff;
+
+  --color-line: rgba(255, 255, 255, 0.15);
+  --color-bar: rgba(117, 117, 132, 0.8);
+  --stroke-ring: rgba(255, 255, 255, 0.8);
+
+  /* --- Fonts --- */
+  --font-main: "OpenSauceSans", sans-serif;
+  --font-mono: monospace;
+
+  /* --- Z-Index Layers --- */
+  --z-base: 0;
+  --z-content: 1;
+  --z-bottom-bg: 15;
+  --z-line: 16;
+  --z-ui: 30;
+  --z-modal: 100;
+}
+
+/* --- Reset & Base --- */
+
+body {
+  /* Position */
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+
+  /* Typography */
+  font-family: var(--font-main);
+  color: var(--text-inverse);
+
+  /* Visual */
+  background-color: var(--bg-color);
+}
+
+button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  outline: inherit;
+}
+
+/* --- Layout Elements --- */
+
+/* Window Drag Handle */
+#dragHandle {
+  /* Position */
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 0;
+
+  /* Box Model */
+  width: 100%;
+  height: 100%;
+
+  /* Visual */
+  cursor: grab;
+  background: transparent;
+}
+
+.container {
+  /* Position */
+  position: relative;
+  z-index: var(--z-content);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  /* Box Model */
+  height: 100vh;
+  padding: 0;
+
+  /* Interaction */
+  pointer-events: none;
+}
+
+.horizontal-line {
+  /* Position */
+  position: fixed;
+  bottom: 27px;
+  left: 0;
+  z-index: var(--z-line);
+
+  /* Box Model */
+  width: 100%;
+  height: 1px;
+
+  /* Visual */
+  background-color: var(--color-line);
+  pointer-events: none;
+}
+
+.bottom-background {
+  /* Position */
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  z-index: var(--z-bottom-bg);
+
+  /* Box Model */
+  width: 100%;
+  height: 27px;
+
+  /* Visual */
+  background-color: var(--bg-color);
+  pointer-events: none;
+}
+
+/* --- Visualizer --- */
+
+.visualizer-container {
+  /* Position */
+  z-index: var(--z-content);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  /* Box Model */
+  width: 100%;
+  height: 300px;
+  margin-bottom: 26px;
+
+  /* Interaction */
+  pointer-events: none;
+}
+
+.visualizer-container__bar {
+  /* Position */
+  display: inline-block;
+  transform-origin: center;
+
+  /* Box Model */
+  width: calc(80% / 80);
+  min-height: 1px;
+
+  /* Visual */
+  background: var(--color-bar);
+  border-radius: 400px;
+  transition: transform 0.05s ease-out;
+}
+
+/* --- UI Controls --- */
+
+.indicators-container {
+  /* Position */
+  position: absolute;
+  bottom: 3px;
+  left: 8px;
+  z-index: var(--z-ui);
+  display: flex;
+  align-items: center;
+  isolation: isolate;
+
+  /* Box Model */
+  gap: 40px;
+
+  /* Interaction */
+  pointer-events: auto;
+}
+
+#settings-btn {
+  /* Position */
+  position: fixed;
+  bottom: 0;
+  right: 5px;
+  z-index: var(--z-ui);
+  display: flex;
+  align-items: center;
+
+  /* Box Model */
+  padding: 8px;
+  gap: 5px;
+
+  /* Typography */
+  font-family: var(--font-main);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+
+  /* Visual */
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.2s;
+}
+
+#settings-btn > * {
+  position: relative;
+  z-index: 1;
+}
+
+#settings-btn:hover {
+  color: var(--text-white);
+}
+
+#settings-btn.disabled {
+  opacity: 1;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.back-button {
+  /* Position */
+  position: fixed;
+  bottom: 8px;
+  left: 145px;
+  z-index: var(--z-ui);
+  display: none; /* Toggled by JS */
+  align-items: center;
+
+  /* Box Model */
+  gap: 5px;
+
+  /* Typography */
+  font-family: var(--font-main);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+
+  /* Visual */
+  opacity: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 0.15s ease-out;
+}
+
+.back-button:hover {
+  color: var(--text-white);
+}
+
+/* --- Icons & SVG --- */
+
+.svg-wrapper {
+  /* Position */
+  position: relative;
+  z-index: var(--z-content);
+  display: flex;
+  align-items: center;
+
+  /* Box Model */
+  gap: 0;
+}
+
+.svg-wrapper.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.circle-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.main-ring,
+.ai-icon-path {
+  fill: none;
+  stroke: var(--stroke-ring);
+}
+
+.main-ring {
+  stroke-width: 15;
+}
+
+.ai-icon-path {
+  stroke-width: 3;
+}
+
+.red-dot {
+  /* Visual */
+  fill: var(--accent-red);
+  stroke: var(--bg-color);
+  stroke-width: 0;
+  opacity: 0;
+
+  /* Animation */
+  transform-origin: 80px 20px;
+  transform: scale(0.5);
+  transition: opacity 0.2s ease-out,
+    transform 0.25s cubic-bezier(0.25, 1.5, 0.5, 1), filter 0.2s ease;
+}
+
+@keyframes pulse-dot {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+#record.recording .red-dot,
+.recording .red-dot,
+#ask-ai.asking .red-dot {
+  opacity: 1;
+  animation: pulse-dot 1.5s infinite ease-in-out;
+  filter: drop-shadow(0 0 6px rgba(255, 59, 48, 0.9));
+}
+
+.record-label {
+  /* Position */
+  z-index: var(--z-content);
+
+  /* Box Model */
+  margin-left: -2px;
+
+  /* Typography */
+  font-family: var(--font-main);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+
+  /* Interaction */
+  user-select: none;
+  transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+#record.recording .record-label,
+#ask-ai.asking .record-label {
+  color: var(--text-white);
+}
+
+/* --- AI Response Area --- */
+
+.ai-response-container {
+  /* Position */
+  z-index: var(--z-content);
+  display: none; /* Toggled by JS */
+  flex-direction: column;
+
+  /* Box Model */
+  width: 95%;
+  margin-top: 18px;
+  overflow: hidden;
+
+  /* Interaction */
+  pointer-events: auto;
+}
+
+.ai-text {
+  /* Typography */
+  font-family: var(--font-main);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-main);
+  text-align: left;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+
+  /* Box Model */
+  padding: 0 5px;
+  overflow-y: auto;
+
+  /* Visual */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.ai-text::-webkit-scrollbar {
+  display: none;
+}
+
+/* Markdown Elements within AI Text */
+.ai-text h1,
+.ai-text h2,
+.ai-text h3 {
+  margin: 0.8em 0 0.4em 0;
+  color: var(--text-white);
+  font-weight: 600;
+}
+
+.ai-text h1 {
+  font-size: 1.4em;
+}
+
+.ai-text p {
+  margin: 0 0 0.5em 0;
+}
+
+.ai-text code {
+  background: var(--bg-code-inline);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+}
+
+.ai-text pre {
+  background: var(--bg-code);
+  padding: 10px;
+  border-radius: 5px;
+  overflow-x: auto;
+}
+
+.ai-text pre code {
+  background: none;
+  padding: 0;
+}
+
+.ai-text a {
+  color: var(--accent-blue);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(100, 181, 246, 0.3);
+  transition: all 0.2s ease;
+}
+
+.ai-text a:visited {
+  color: var(--accent-blue);
+}
+
+.ai-text a:hover {
+  color: var(--accent-blue-hover);
+  border-bottom-color: var(--accent-blue-hover);
+  cursor: pointer;
+}
+
+/* --- Error States --- */
+
+#error-container {
+  /* Position */
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: var(--z-modal);
+  display: none; /* Toggled by JS */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  /* Box Model */
+  width: 100%;
+  height: 100%;
+
+  /* Visual */
+  background-color: var(--bg-secondary);
+}
+
+#error-message {
+  margin-top: 10px;
+  color: var(--text-main);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* --- External Libraries --- */
+
+/* KaTeX adjustments */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0.5em 0;
+  padding: 0.2em 0;
+}
+
+.katex {
+  font-size: 1.1em;
+}

@@ -1,0 +1,26 @@
+# --- Core GUI & System ---
+pywebview==5.4
+PySide6==6.9.1
+python-dotenv==1.0.1
+pywin32==308
+comtypes==1.4.10
+
+# --- Audio & Speech ---
+PyAudio==0.2.14
+pygame==2.6.1
+deepgram-sdk==3.10.1
+groq==0.18.0
+cerebras_cloud_sdk==1.59.0
+numpy==2.2.3
+pycaw==20240210
+
+# --- Inputs & Automation ---
+keyboard==0.13.5
+pyperclip==1.9.0
+PyAutoGUI==0.9.54
+mss==10.0.0
+
+# --- Utilities & Security ---
+requests==2.32.3
+keyring==25.7.0
+text2num==2.5.1
