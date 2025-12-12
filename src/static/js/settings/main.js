@@ -3,6 +3,7 @@
 // --- Hotkey Logic ---
 let capturedHotkey = null;
 let isCapturingHotkey = false;
+let isAppInitialized = false;
 
 window.openHotkeyModal = (buttonElement) => {
   const action = buttonElement.getAttribute("data-action");
@@ -224,7 +225,9 @@ window.hideMissingKeyModalAndGoToApi = () => {
 // --- Initialization ---
 
 window.initApp = async () => {
-  // Attach Global Listeners (Replaces Inline onclicks)
+  if (isAppInitialized) return;
+  isAppInitialized = true;
+
   attachGlobalListeners();
 
   if (window.isApiReady()) {
@@ -431,6 +434,9 @@ function attachGlobalListeners() {
 }
 
 window.addEventListener("pywebviewready", window.initApp);
+setTimeout(() => {
+  if (!isAppInitialized) window.initApp();
+}, 300);
 setTimeout(() => {
   if (!window.pywebview) window.initApp();
 }, 300);

@@ -26,7 +26,7 @@ window.loadAgents = () => {
 };
 
 /**
- * Renders the list of agents to the DOM.
+ * Renders the list of agents to the DOM safely.
  * @param {Array} agentsToDisplay - The filtered list of agents.
  */
 function displayAgents(agentsToDisplay) {
@@ -64,22 +64,14 @@ function displayAgents(agentsToDisplay) {
     card.className = `agent-card ${agent.active ? "active" : ""}`;
     card.id = `agent-${agent.id}`;
 
-    const triggerText = agent.trigger
-      ? window.escapeHtml(agent.trigger)
-      : "<i>None</i>";
-    const promptPreview = agent.prompt
-      ? window.escapeHtml(agent.prompt)
-      : "<i>No prompt defined</i>";
     const statusText = agent.active
       ? window.t("status_active")
       : window.t("status_inactive");
 
-    // Construct basic HTML structure
+    // Create the structure with placeholders for text content
     card.innerHTML = `
             <div class="agent-header">
-                <h4 class="agent-title" title="${window.escapeHtml(
-                  agent.name
-                )}">${window.escapeHtml(agent.name)}</h4>
+                <h4 class="agent-title"></h4>
                 <div class="agent-status-toggle"> 
                     <span class="status-badge ${
                       agent.active ? "status-active" : "status-inactive"
@@ -101,17 +93,13 @@ function displayAgents(agentsToDisplay) {
                     <div class="agent-property-label" data-i18n="lbl_model_ai">${window.t(
                       "lbl_model_ai"
                     )}</div>
-                    <div class="agent-property-value">${
-                      agent.model || "<i>" + window.t("no_model") + "</i>"
-                    }</div>
+                    <div class="agent-property-value model-value"></div>
                 </div>
                 <div class="agent-property">
                     <div class="agent-property-label" data-i18n="lbl_agent_prompt">${window.t(
                       "lbl_agent_prompt"
                     )}</div>
-                    <div class="agent-property-value agent-prompt-preview" title="${window.escapeHtml(
-                      agent.prompt
-                    )}">${promptPreview}</div>
+                    <div class="agent-property-value agent-prompt-preview"></div>
                 </div>
             </div>
             <div class="agent-actions">
@@ -126,7 +114,27 @@ function displayAgents(agentsToDisplay) {
             </div>
         `;
 
-    // Attach Event Listeners (No more inline onclick)
+    // Inject Text Content safely
+    const titleEl = card.querySelector(".agent-title");
+    titleEl.textContent = agent.name;
+    titleEl.title = agent.name;
+
+    const modelEl = card.querySelector(".model-value");
+    if (agent.model) {
+      modelEl.textContent = agent.model;
+    } else {
+      modelEl.innerHTML = "<i>" + window.t("no_model") + "</i>";
+    }
+
+    const promptEl = card.querySelector(".agent-prompt-preview");
+    if (agent.prompt) {
+      promptEl.textContent = agent.prompt;
+      promptEl.title = agent.prompt;
+    } else {
+      promptEl.innerHTML = "<i>No prompt defined</i>";
+    }
+
+    // Attach Event Listeners
     const toggleInput = card.querySelector(".toggle-input");
     toggleInput.addEventListener("change", (e) =>
       window.toggleAgentActive(agent.id, e.target.checked)
@@ -216,7 +224,11 @@ window.showAgentModal = async (agentId = null) => {
     saveBtn.textContent = window.t("btn_create_agent");
 
     if (window.isApiReady()) {
-      agentModelToSelect = await window.pywebview.api.get_current_model();
+      try {
+        agentModelToSelect = await window.pywebview.api.get_current_model();
+      } catch (e) {
+        console.error(e);
+      }
     }
     autopasteToggle.checked = true;
     screenVisionToggle.checked = false;
@@ -285,6 +297,10 @@ window.saveAgent = () => {
         alert(`Error saving agent: ${response.error || "Unknown"}`);
       }
     })
+    .catch((err) => {
+      console.error("Save agent error:", err);
+      alert("System error while saving agent.");
+    })
     .finally(() => {
       saveBtn.disabled = false;
       saveBtn.textContent = window.t("btn_save");
@@ -292,7 +308,7 @@ window.saveAgent = () => {
 };
 
 window.editAgent = (agentId) => {
-  window.showAgentModal(agentId);
+  window.showAgentModal(agentId).catch(console.error);
 };
 
 window.showDeleteAgentModal = (agentId) => {
@@ -326,14 +342,20 @@ window.confirmDeleteAgent = () => {
   const agentId = document.getElementById("agent-delete-id").value;
   if (!window.isApiReady() || !agentId) return;
 
-  window.pywebview.api.delete_agent(agentId).then((success) => {
-    if (success) {
-      window.hideDeleteAgentModal();
-      window.loadAgents();
-    } else {
-      window.showToast("Failed to delete agent.", "error");
-    }
-  });
+  window.pywebview.api
+    .delete_agent(agentId)
+    .then((success) => {
+      if (success) {
+        window.hideDeleteAgentModal();
+        window.loadAgents();
+      } else {
+        window.showToast("Failed to delete agent.", "error");
+      }
+    })
+    .catch((err) => {
+      console.error("Delete agent error:", err);
+      window.showToast("Error communicating with backend.", "error");
+    });
 };
 
 window.toggleAgentActive = (agentId, isActive) => {
@@ -349,6 +371,10 @@ window.toggleAgentActive = (agentId, isActive) => {
       } else {
         window.loadAgents();
       }
+    })
+    .catch((err) => {
+      console.error("Toggle error:", err);
+      window.loadAgents();
     });
 };
 

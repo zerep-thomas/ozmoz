@@ -11,15 +11,18 @@ window._updateCustomSelectDisplay = (containerId, newValue) => {
 
   if (!nativeSelect || !selectedDisplay || !itemsContainer) return;
 
-  // Force value update
   nativeSelect.value = newValue;
 
-  // Visual update
   const itemToSelect = itemsContainer.querySelector(
     `div[data-value="${newValue}"]`
   );
   if (itemToSelect) {
-    selectedDisplay.innerHTML = `<div class="select-selected-content">${itemToSelect.innerHTML}</div>`;
+    selectedDisplay.textContent = "";
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "select-selected-content";
+    contentDiv.innerHTML = itemToSelect.innerHTML;
+    selectedDisplay.appendChild(contentDiv);
+
     Array.from(itemsContainer.children).forEach((child) =>
       child.classList.remove("same-as-selected")
     );
@@ -31,7 +34,6 @@ window._updateCustomSelectDisplay = (containerId, newValue) => {
 window.populateLanguageDropdown = async () => {
   const nativeSelect = document.getElementById("language-select");
   const itemsContainer = document.getElementById("language-select-items");
-  const selectedDisplay = document.getElementById("language-select-selected");
 
   if (!nativeSelect || !itemsContainer) return;
 
@@ -42,7 +44,6 @@ window.populateLanguageDropdown = async () => {
 
   languages.forEach((lang) => {
     const translatedName = window.t(lang.key);
-    const textWithFlag = `${translatedName}${lang.flag ? " " + lang.flag : ""}`;
 
     // Native Option
     const option = document.createElement("option");
@@ -53,7 +54,20 @@ window.populateLanguageDropdown = async () => {
 
     // Custom Item
     const div = document.createElement("div");
-    div.innerHTML = `<span class="model-name-display">${textWithFlag}</span>`;
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "model-name-display";
+    nameSpan.textContent = translatedName;
+
+    div.appendChild(nameSpan);
+
+    if (lang.flag) {
+      // Flags are trusted HTML from constants
+      const flagSpan = document.createElement("span");
+      flagSpan.innerHTML = ` ${lang.flag}`;
+      nameSpan.appendChild(flagSpan);
+    }
+
     div.dataset.value = lang.value;
 
     div.addEventListener("click", function (e) {
@@ -61,9 +75,18 @@ window.populateLanguageDropdown = async () => {
       nativeSelect.value = this.dataset.value;
 
       itemsContainer.classList.add("select-hide");
-      selectedDisplay.classList.remove("select-arrow-active");
+      const selectedDisplay = document.getElementById(
+        "language-select-selected"
+      );
+      if (selectedDisplay) {
+        selectedDisplay.classList.remove("select-arrow-active");
+        selectedDisplay.textContent = "";
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "select-selected-content";
+        contentDiv.innerHTML = this.innerHTML;
+        selectedDisplay.appendChild(contentDiv);
+      }
 
-      selectedDisplay.innerHTML = `<div class="select-selected-content">${this.innerHTML}</div>`;
       Array.from(itemsContainer.children).forEach((child) =>
         child.classList.remove("same-as-selected")
       );
@@ -73,7 +96,6 @@ window.populateLanguageDropdown = async () => {
     itemsContainer.appendChild(div);
   });
 
-  // Remove old listeners to prevent duplication
   const newSelect = nativeSelect.cloneNode(true);
   nativeSelect.parentNode.replaceChild(newSelect, nativeSelect);
   newSelect.addEventListener("change", handleLanguageChange);
@@ -90,12 +112,20 @@ async function handleLanguageChange(event) {
     itemsContainer.innerHTML = "";
     window.LANGUAGES_DATA.forEach((lang) => {
       const translatedName = window.t(lang.key);
-      const textWithFlag = `${translatedName}${
-        lang.flag ? " " + lang.flag : ""
-      }`;
 
       const div = document.createElement("div");
-      div.innerHTML = `<span class="model-name-display">${textWithFlag}</span>`;
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "model-name-display";
+      nameSpan.textContent = translatedName;
+      div.appendChild(nameSpan);
+
+      if (lang.flag) {
+        const flagSpan = document.createElement("span");
+        flagSpan.innerHTML = ` ${lang.flag}`;
+        nameSpan.appendChild(flagSpan);
+      }
+
       div.dataset.value = lang.value;
 
       if (lang.value === newLanguage) {
@@ -103,8 +133,13 @@ async function handleLanguageChange(event) {
         const selectedDisplay = document.getElementById(
           "language-select-selected"
         );
-        if (selectedDisplay)
-          selectedDisplay.innerHTML = `<div class="select-selected-content">${div.innerHTML}</div>`;
+        if (selectedDisplay) {
+          selectedDisplay.textContent = "";
+          const contentDiv = document.createElement("div");
+          contentDiv.className = "select-selected-content";
+          contentDiv.innerHTML = div.innerHTML;
+          selectedDisplay.appendChild(contentDiv);
+        }
       }
 
       div.addEventListener("click", function (e) {
@@ -126,7 +161,6 @@ async function handleLanguageChange(event) {
   try {
     if (!window.isApiReady()) return;
 
-    // Save to Python backend
     const response = await window.pywebview.api.set_language(newLanguage);
 
     const currentAudioModel =
@@ -138,7 +172,6 @@ async function handleLanguageChange(event) {
       );
     }
 
-    // Refresh Models using the NEW language
     await window.populateAudioModelDropdown();
     await handleAudioModelChange();
 
@@ -217,13 +250,20 @@ window.populateAudioModelDropdown = async () => {
       nativeSelect.appendChild(nativeOption);
 
       const itemDiv = document.createElement("div");
-      const badgeHtml = `<span class="model-feature-badge">${
-        model.advantage || "Standard"
-      }</span>`;
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "model-name-display";
+      nameSpan.textContent = model.name;
+
+      const badgeSpan = document.createElement("span");
+      badgeSpan.className = "model-feature-badge";
+      badgeSpan.textContent = model.advantage || "Standard";
 
       if (isLocked) itemDiv.classList.add("option-disabled", "locked-by-key");
 
-      itemDiv.innerHTML = `<span class="model-name-display">${model.name}</span>${badgeHtml}`;
+      itemDiv.appendChild(nameSpan);
+      itemDiv.appendChild(badgeSpan);
+
       itemDiv.dataset.value = model.name;
       itemDiv.dataset.provider = model.provider;
 
@@ -238,7 +278,12 @@ window.populateAudioModelDropdown = async () => {
         nativeSelect.value = modelValue;
         window.pywebview.api.set_audio_model(modelValue);
 
-        selectedDisplay.innerHTML = `<div class="select-selected-content">${this.innerHTML}</div>`;
+        selectedDisplay.textContent = "";
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "select-selected-content";
+        contentDiv.innerHTML = this.innerHTML;
+        selectedDisplay.appendChild(contentDiv);
+
         itemsContainer.classList.add("select-hide");
         selectedDisplay.classList.remove("select-arrow-active");
         Array.from(itemsContainer.children).forEach((child) =>
@@ -260,11 +305,10 @@ window.populateAudioModelDropdown = async () => {
         nativeSelect.value = currentAudioModel;
       } else if (nativeSelect.options.length > 0) {
         for (let i = 0; i < nativeSelect.options.length; i++) {
-          if (!nativeSelect.options[i].disabled) {
-            nativeSelect.value = nativeSelect.options[i].value;
-            window.pywebview.api.set_audio_model(nativeSelect.value);
-            break;
-          }
+          if (nativeSelect.options[i].disabled) continue;
+          nativeSelect.value = nativeSelect.options[i].value;
+          window.pywebview.api.set_audio_model(nativeSelect.value);
+          break;
         }
       }
       window._updateCustomSelectDisplay(
@@ -297,7 +341,7 @@ window.populateModelDropdown = async (
   if (!nativeSelect || nativeSelect.dataset.loading === "true") return;
 
   nativeSelect.dataset.loading = "true";
-  selectedDisplay.innerHTML = `<span>${window.t("loading")}</span>`;
+  selectedDisplay.textContent = window.t("loading");
   itemsContainer.innerHTML = "";
   nativeSelect.innerHTML = "";
 
@@ -308,7 +352,7 @@ window.populateModelDropdown = async (
     ]);
 
     if (!models || models.length === 0) {
-      selectedDisplay.innerHTML = `<span>${window.t("no_models")}</span>`;
+      selectedDisplay.textContent = window.t("no_models");
       return;
     }
 
@@ -326,12 +370,20 @@ window.populateModelDropdown = async (
       nativeSelect.appendChild(nativeOption);
 
       const itemDiv = document.createElement("div");
-      const badgeHtml = `<span class="model-feature-badge">${
-        model.advantage || "General"
-      }</span>`;
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "model-name-display";
+      nameSpan.textContent = model.name;
+
+      const badgeSpan = document.createElement("span");
+      badgeSpan.className = "model-feature-badge";
+      badgeSpan.textContent = model.advantage || "General";
+
       if (isLocked) itemDiv.classList.add("option-disabled", "locked-by-key");
 
-      itemDiv.innerHTML = `<span class="model-name-display">${model.name}</span>${badgeHtml}`;
+      itemDiv.appendChild(nameSpan);
+      itemDiv.appendChild(badgeSpan);
+
       itemDiv.dataset.value = model.id;
       itemDiv.dataset.multimodal = String(model.is_multimodal);
       itemDiv.dataset.web = String(model.is_web_model);
@@ -339,6 +391,7 @@ window.populateModelDropdown = async (
 
       itemDiv.addEventListener("click", function (e) {
         e.stopPropagation();
+
         if (this.classList.contains("locked-by-key")) {
           window.showMissingKeyModal(this.dataset.provider);
           return;
@@ -365,7 +418,13 @@ window.populateModelDropdown = async (
 
         nativeSelect.value = this.dataset.value;
         nativeSelect.dispatchEvent(new Event("change"));
-        selectedDisplay.innerHTML = `<div class="select-selected-content">${this.innerHTML}</div>`;
+
+        selectedDisplay.textContent = "";
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "select-selected-content";
+        contentDiv.innerHTML = this.innerHTML;
+        selectedDisplay.appendChild(contentDiv);
+
         itemsContainer.classList.add("select-hide");
         selectedDisplay.classList.remove("select-arrow-active");
 
@@ -374,6 +433,7 @@ window.populateModelDropdown = async (
         );
         this.classList.add("same-as-selected");
       });
+
       itemsContainer.appendChild(itemDiv);
     });
 
@@ -396,7 +456,7 @@ window.populateModelDropdown = async (
     window.updateTogglesAndModelsState();
   } catch (error) {
     console.error("Error loading text models:", error);
-    selectedDisplay.innerHTML = `<span>${window.t("error_loading")}</span>`;
+    selectedDisplay.textContent = window.t("error_loading");
   } finally {
     nativeSelect.dataset.loading = "false";
   }
@@ -472,30 +532,37 @@ window.saveApiKeys = () => {
   saveBtn.innerText = window.t("saving");
   saveBtn.disabled = true;
 
-  window.pywebview.api.save_api_keys(dataToSend).then((response) => {
-    if (response.success) {
-      inputs.forEach((input) => (initialApiState[input.id] = input.value));
-      saveBtn.innerText = window.t("saved");
-      saveBtn.style.backgroundColor = "var(--color-green)";
+  window.pywebview.api
+    .save_api_keys(dataToSend)
+    .then((response) => {
+      if (response.success) {
+        inputs.forEach((input) => (initialApiState[input.id] = input.value));
+        saveBtn.innerText = window.t("saved");
+        saveBtn.style.backgroundColor = "var(--color-green)";
 
-      window.populateModelDropdown();
-      window.populateAudioModelDropdown();
+        window.populateModelDropdown();
+        window.populateAudioModelDropdown();
 
-      setTimeout(() => {
-        document.querySelector(".api-actions").classList.remove("visible");
+        setTimeout(() => {
+          document.querySelector(".api-actions").classList.remove("visible");
+          saveBtn.innerText = originalText;
+          saveBtn.style.backgroundColor = "";
+          saveBtn.disabled = false;
+        }, 1500);
+      } else {
+        window.showToast("Error saving keys.", "error");
         saveBtn.innerText = originalText;
-        saveBtn.style.backgroundColor = "";
         saveBtn.disabled = false;
-      }, 1500);
-    } else {
-      window.showToast("Error saving keys.", "error");
+      }
+    })
+    .catch((err) => {
+      console.error("Error saving keys:", err);
+      window.showToast("Critical error saving keys.", "error");
       saveBtn.innerText = originalText;
       saveBtn.disabled = false;
-    }
-  });
+    });
 };
 
-// Update UI opacity based on settings
 window.updateTogglesAndModelsState = () => {
   const textModelOptions = document.querySelectorAll(
     "#custom-model-select-container .select-items div, #custom-agent-model-select-container .select-items div"

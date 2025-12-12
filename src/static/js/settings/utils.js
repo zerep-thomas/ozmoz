@@ -80,31 +80,34 @@ window.initCustomSelects = () => {
     "custom-select-container"
   );
 
-  // Close dropdowns when clicking outside
-  document.addEventListener("click", (e) => {
-    Array.from(customSelects).forEach((selectContainer) => {
-      const selectedDisplay = selectContainer.querySelector(".select-selected");
-      const itemsContainer = selectContainer.querySelector(".select-items");
-      if (
-        selectedDisplay &&
-        itemsContainer &&
-        !selectContainer.contains(e.target)
-      ) {
-        itemsContainer.classList.add("select-hide");
-        selectedDisplay.classList.remove("select-arrow-active");
-      }
+  if (!window._globalSelectCloseAttached) {
+    document.addEventListener("click", (e) => {
+      Array.from(customSelects).forEach((selectContainer) => {
+        const selectedDisplay =
+          selectContainer.querySelector(".select-selected");
+        const itemsContainer = selectContainer.querySelector(".select-items");
+        if (
+          selectedDisplay &&
+          itemsContainer &&
+          !selectContainer.contains(e.target)
+        ) {
+          itemsContainer.classList.add("select-hide");
+          selectedDisplay.classList.remove("select-arrow-active");
+        }
+      });
     });
-  });
+    window._globalSelectCloseAttached = true;
+  }
 
-  // Toggle dropdowns
   Array.from(customSelects).forEach((selectContainer) => {
+    if (selectContainer.dataset.hasInit === "true") return;
+
     const selectedDisplay = selectContainer.querySelector(".select-selected");
     const itemsContainer = selectContainer.querySelector(".select-items");
 
     if (selectedDisplay && itemsContainer) {
       selectedDisplay.addEventListener("click", (e) => {
         e.stopPropagation();
-        // Close other dropdowns
         Array.from(customSelects).forEach((otherContainer) => {
           if (otherContainer !== selectContainer) {
             otherContainer
@@ -118,6 +121,7 @@ window.initCustomSelects = () => {
         itemsContainer.classList.toggle("select-hide");
         selectedDisplay.classList.toggle("select-arrow-active");
       });
+      selectContainer.dataset.hasInit = "true";
     }
   });
 };

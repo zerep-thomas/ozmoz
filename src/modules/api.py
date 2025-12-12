@@ -803,6 +803,12 @@ class API:
 
         handler: Any = getattr(self._app_state, "log_handler", None)
         if handler and hasattr(handler, "buffer"):
+            if hasattr(handler, "acquire") and hasattr(handler, "release"):
+                handler.acquire()
+                try:
+                    return list(handler.buffer)
+                finally:
+                    handler.release()
             return list(handler.buffer)
 
         return [{"level": "ERROR", "message": "Log handler not found."}]

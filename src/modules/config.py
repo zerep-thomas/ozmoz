@@ -165,20 +165,22 @@ class DuplicateFilter(logging.Filter):
         super().__init__()
         self.time_window: timedelta = timedelta(seconds=time_window_seconds)
         self.log_cache: collections.deque = collections.deque(maxlen=max_cache_size)
+        self.lock = threading.Lock()
 
     def filter(self, record: logging.LogRecord) -> bool:
-        current_time: datetime = datetime.now()
-        message: str = record.getMessage()
+        with self.lock:
+            current_time: datetime = datetime.now()
+            message: str = record.getMessage()
 
-        for timestamp, cached_message in self.log_cache:
-            if (
-                message == cached_message
-                and (current_time - timestamp) < self.time_window
-            ):
-                return False
+            for timestamp, cached_message in self.log_cache:
+                if (
+                    message == cached_message
+                    and (current_time - timestamp) < self.time_window
+                ):
+                    return False
 
-        self.log_cache.append((current_time, message))
-        return True
+            self.log_cache.append((current_time, message))
+            return True
 
 
 def setup_logging() -> None:

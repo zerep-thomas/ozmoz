@@ -136,14 +136,18 @@ function renderActivityChart(
 
   let canvas = document.getElementById("activity-chart-canvas");
   if (!canvas) {
-    chartContainer.innerHTML = '<canvas id="activity-chart-canvas"></canvas>';
-    canvas = document.getElementById("activity-chart-canvas");
+    canvas = document.createElement("canvas");
+    canvas.id = "activity-chart-canvas";
+    chartContainer.innerHTML = "";
+    chartContainer.appendChild(canvas);
   }
   const ctx = canvas.getContext("2d");
 
   if (isError) {
-    chartContainer.innerHTML =
-      '<p style="text-align:center; color: var(--color-red); margin-top: 50px;">Error loading chart data.</p>';
+    chartContainer.textContent = "Error loading chart data.";
+    chartContainer.style.color = "var(--color-red)";
+    chartContainer.style.textAlign = "center";
+    chartContainer.style.marginTop = "50px";
     return;
   }
 
@@ -264,6 +268,7 @@ function renderActivityChart(
             label: function (context) {
               const originalValue = originalValues[context.dataIndex];
               let label = context.dataset.label || "";
+
               if (label) {
                 label += ": ";
               }

@@ -356,7 +356,7 @@ class OzmozApp:
             ).start()
 
             logging.info("System ready. Starting UI loop.")
-            webview.start(debug=False)
+            webview.start(debug=True)
 
         except Exception as e:
             logging.critical(f"FATAL APPLICATION CRASH: {e}", exc_info=True)
