@@ -11,3 +11,8 @@ __pycache__/
 
 # Ignore secret environment variables (keep .env.example, ignore .env)
 .env
+
+# Ignore build and dist folders (PyInstaller)
+build/
+dist/
+*.spec

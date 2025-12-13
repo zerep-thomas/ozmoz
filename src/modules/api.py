@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QApplication
 
 # Internal modules
 from modules.config import AppConfig, AppState
+from modules.local_audio import local_whisper
 
 
 class API:
@@ -355,12 +356,28 @@ class API:
 
     def get_translated_audio_models(self) -> List[Dict[str, str]]:
         """
-        Translates descriptions for audio models based on the selected language.
+        Translates descriptions for audio models and injects the hardcoded Local Model.
         """
+
         if not self._app_state.cached_remote_config:
             self._config_manager.load_and_parse_remote_config()
 
         translated_models = []
+
+        is_fr = self._app_state.language.startswith("fr")
+        local_desc = "Local (Offline), Ultra Fast, Privacy Focused"
+        if is_fr:
+            local_desc = "Local (Hors-ligne), Ultra Rapide, Privé"
+
+        translated_models.append(
+            {
+                "name": "local-whisper-large-v3-turbo",
+                "advantage": local_desc,
+                "provider": "local",
+                "is_local": True,
+            }
+        )
+
         audio_config_data = next(
             (
                 item
@@ -386,6 +403,34 @@ class API:
                 )
 
         return translated_models
+
+    def get_local_model_status(self) -> Dict[str, bool]:
+        """
+        Returns the current installation status of the local model.
+        """
+        return {
+            "installed": local_whisper.is_installed(),
+            "loading": local_whisper.is_loading,
+        }
+
+    def install_local_model(self) -> Dict[str, Any]:
+        """
+        Initiates the download process in a background thread.
+        Notifies the UI upon completion via JavaScript execution.
+        """
+        if local_whisper.is_loading:
+            return {"success": False, "error": "Download already in progress."}
+
+        def run_install():
+            success = local_whisper.download()
+            if self._app_state.settings_window:
+                status = "success" if success else "error"
+                self._app_state.settings_window.evaluate_js(
+                    f"window.onLocalModelInstallFinished('{status}')"
+                )
+
+        threading.Thread(target=run_install, daemon=True).start()
+        return {"success": True, "message": "Installation started"}
 
     def set_model(self, model_ai: str) -> Dict[str, bool]:
         """

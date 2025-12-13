@@ -37,7 +37,7 @@
 
 ## 📖 Overview
 
-**Ozmoz** is a desktop application that integrates AI into the Windows operating system. Unlike web-based chat interfaces, Ozmoz floats above your applications, allowing you to interact with AI models (Groq, Cerebras) and high-speed transcription engines (Groq, Deepgram) without interrupting your workflow.
+**Ozmoz** is a desktop application that integrates AI into the Windows operating system. Unlike web-based chat interfaces, Ozmoz floats above your applications, allowing you to interact with AI models (Groq, Cerebras) and high-speed transcription engines without interrupting your workflow. It supports both **Cloud** (API) and **Local** (Offline) processing.
 <br>
 
 <div align="center">
@@ -46,25 +46,28 @@
 
 ## ✨ Key Features
 
-- **🎙️ Ultra-low latency transcription:** uses Groq/Whisper and Deepgram Nova-2/3 for near-instant speech-to-text transcription directly in any application.
-- **🧠 Contextual AI:** select text in any application, press a keyboard shortcut, and Ozmoz analyzes it using the latest LLMs.
-- **👁️ Screen vision:** allows AI to “see” your active window to explain code, analyze data, or summarize (multimodal).
-- **🌐 Live Web Search:** performs real-time internet searches to provide up-to-date answers with citations, bridging the gap between LLMs and live data.
-- **🤖 Custom agents:** create specialized characters triggered by voice keywords (e.g., “Hey Dev” to switch to a coding assistant).
-- **⚡ Smart replacements:** built-in text expander for frequently used phrases.
-- **📊 Analytics dashboard:** tracks dictated words, time saved, and typing speed (WPM).
+- **🎙️ Flexible Transcription:**
+  - **Local Mode:** Uses _Whisper V3 Turbo_ running on your device (Offline, Privacy-focused). Optimized for NVIDIA GPUs (CUDA) with CPU fallback.
+  - **Cloud Mode:** Uses _Groq/Whisper_ or _Deepgram Nova-2_ for ultra-low latency.
+- **🧠 Contextual AI:** Select text in any application, press a keyboard shortcut, and Ozmoz analyzes it using the latest LLMs.
+- **👁️ Screen Vision:** Allows AI to “see” your active window to explain code, analyze data, or summarize (multimodal).
+- **🌐 Live Web Search:** Performs real-time internet searches to provide up-to-date answers with citations.
+- **🤖 Custom Agents:** Create specialized characters triggered by voice keywords (e.g., “Hey Dev” to switch to a coding assistant).
+- **⚡ Smart Replacements:** Built-in text expander for frequently used phrases.
+- **📊 Analytics Dashboard:** Tracks dictated words, time saved, and typing speed (WPM).
 
 <br>
 
 ## 🛠️ Tech Stack
 
-A hybrid architecture chosen for high performance and low memory footprint (vs. Electron).
+A hybrid architecture chosen for high performance and low memory footprint.
 
 - **Core:** Python 3.10+ (AI Orchestration & Backend Logic).
-- **GUI Bridge:** `pywebview` (Wraps native Edge WebView2 for lightweight rendering).
-- **Frontend:** HTML5, CSS3, Modern JavaScript (ES6 Modules, no framework overhead), Chart.js.
-- **OS Integration:** `pywin32` & `ctypes` (Low-level System Hooks), `mss` (Ultra-fast Screen Capture), `keyboard` (Global Hotkeys).
-- **Audio Processing:** `PyAudio` (Stream I/O), `numpy` (Real-time FFT & Signal Processing).
+- **Local Inference:** `faster-whisper` (CTranslate2) with portable CUDA support.
+- **GUI Bridge:** `pywebview` (Wraps native Edge WebView2).
+- **Frontend:** HTML5, CSS3, Modern JavaScript (ES6 Modules), Chart.js.
+- **OS Integration:** `pywin32` & `ctypes` (Low-level Hooks), `mss` (Screen Capture), `keyboard` (Hotkeys).
+- **Audio:** `PyAudio` (Stream I/O), `numpy` (Real-time processing).
 
 <br>
 
@@ -74,8 +77,9 @@ A hybrid architecture chosen for high performance and low memory footprint (vs. 
 
 Before running Ozmoz, ensure you have the following installed:
 
-- **Windows 10/11** (Required for low-level hooks).
-- **Python 3.10** or higher.
+- **Windows 10/11**
+- **Python 3.10** or higher
+- **FFmpeg & zlibwapi.dll** (Must be placed in a `/bin` folder at the root for local features).
 
 ### Setup Guide
 
@@ -86,7 +90,7 @@ Before running Ozmoz, ensure you have the following installed:
     cd ozmoz
     ```
 
-2.  **Create a Virtual Environment** (Recommended)
+2.  **Create a Virtual Environment**
 
     ```bash
     python -m venv venv
@@ -108,22 +112,20 @@ Before running Ozmoz, ensure you have the following installed:
 
 ## ⚙️ Configuration
 
-Ozmoz is designed to be model-agnostic but requires API keys for cloud inference.
-Upon first launch, click the **Gear Icon ⚙️** in the UI and navigate to the **API Keys** tab.
+Ozmoz is hybrid. You can use it **100% offline for transcription**, or add API keys for AI generation and cloud speed.
 
-| Provider         | Purpose                                            | Requirement            |
-| :--------------- | :------------------------------------------------- | :--------------------- |
-| **Groq API**     | Ultra-fast text inference & Whisper transcription. | **Required**           |
-| **Deepgram API** | _Nova-2_ model for lightning-fast voice-to-text.   | Optional (Recommended) |
-| **Cerebras API** | High-throughput alternative for LLM tasks.         | Optional               |
+| Provider         | Purpose                                           | Requirement         |
+| :--------------- | :------------------------------------------------ | :------------------ |
+| **Groq API**     | Text generation (LLM) & Cloud transcription.      | **Required for AI** |
+| **Local Model**  | _Whisper V3 Turbo_ (Offline transcription).       | **No Key Required** |
+| **Deepgram API** | _Nova-2_ model (Alternative cloud transcription). | Optional            |
+| **Cerebras API** | High-throughput alternative for LLM tasks.        | Optional            |
 
-> **Note:** API keys are stored securely in your local OS credential manager (Windows Credential Locker) using the `keyring` library. They are never synced to the cloud.
+> **Local Model Note:** Upon first use of the "Local" model, a ~1.8 GB download will occur.
 
 <br>
 
 ## ⌨️ Controls & Hotkeys
-
-Ozmoz sits quietly in the background. Use these global shortcuts to control it from any application.
 
 | Action                   | Default Hotkey                   | Description                                                                            |
 | :----------------------- | :------------------------------- | :------------------------------------------------------------------------------------- |
@@ -137,32 +139,23 @@ Ozmoz sits quietly in the background. Use these global shortcuts to control it f
 
 ## 🏗️ Building from Source
 
-To create a standalone `.exe` file for distribution without Python installed:
+To create a standalone `.exe` file:
 
-1.  Ensure `pyinstaller` is installed:
-
-    ```bash
-    pip install pyinstaller
-    ```
-
-2.  Build using the included spec file (handles assets & dependencies):
-
+1.  Ensure `pyinstaller` is installed (`pip install pyinstaller`).
+2.  Build using the spec file:
     ```bash
     pyinstaller Ozmoz.spec
     ```
-
-3.  The executable will be generated in the `dist/Ozmoz/` folder.
+3.  **Important:** Manually copy the `bin/` folder (containing ffmpeg and zlibwapi.dll) into the `dist/Ozmoz/` folder after building.
 
 <br>
 
 ## 🤝 Contributing
 
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
 1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
+2.  Create your Feature Branch
+3.  Commit your Changes
+4.  Push to the Branch
 5.  Open a Pull Request
 
 <br>
@@ -170,13 +163,7 @@ Contributions are what make the open-source community such an amazing place to l
 ## 📄 License
 
 Distributed under CC BY-NC-SA 4.0 License. See `LICENSE` for more information.
-This software includes the following open-source software:
-
-- **Chart.js** (MIT License) - Copyright (c) 2014-2022 Chart.js Contributors
-- **chartjs-plugin-datalabels** (MIT License) - Copyright (c) 2017-2021 chartjs-plugin-datalabels contributors
-- **KaTeX** (MIT License) - Copyright (c) 2013-2024 Khan Academy and other contributors
-- **Highlight.js** (BSD 3-Clause) - Copyright (c) 2006, Ivan Sagalaev
-- **PyWebView** (BSD 3-Clause) - Copyright (c) 2014-2024 Roman Sirokov
+This project bundles **FFmpeg** (LGPLv2.1) and **zlibwapi** (zlib license).
 
 <br/>
 

@@ -1545,5 +1545,126 @@
 
     <!-- Toast Container -->
     <div id="toast-container" aria-live="polite"></div>
+
+    <!-- Local Model Download Modal -->
+    <div
+      class="modal-backdrop"
+      id="local-model-modal-backdrop"
+      aria-hidden="true"
+      style="display: none"
+    >
+      <div
+        class="confirm-modal"
+        id="local-model-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+        style="max-width: 450px"
+      >
+        <h3
+          style="
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--color-text);
+          "
+        >
+          <span data-i18n="modal_local_title">Téléchargement requis</span>
+        </h3>
+        <p
+          style="
+            margin-bottom: var(--spacing-md);
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            line-height: 1.5;
+          "
+        >
+          <span data-i18n="modal_local_desc">
+            Pour utiliser la transcription hors ligne, le modèle Whisper V3
+            Turbo doit être téléchargé.
+          </span>
+          <br /><br />
+          <span
+            style="
+              font-size: 12px;
+              background: rgba(0, 0, 0, 0.05);
+              padding: 4px 8px;
+              border-radius: 4px;
+              font-family: monospace;
+            "
+            data-i18n="modal_local_size"
+          >
+            Taille : ~1.8 GB
+          </span>
+        </p>
+
+        <!-- Progress Bar -->
+        <div
+          id="local-download-progress"
+          style="display: none; margin-bottom: 20px"
+        >
+          <div
+            style="
+              height: 6px;
+              width: 100%;
+              background: var(--color-border);
+              border-radius: 3px;
+              overflow: hidden;
+            "
+          >
+            <div
+              style="
+                height: 100%;
+                width: 100%;
+                background: var(--color-accent);
+                animation: loading 2s infinite ease-in-out;
+                transform-origin: 0% 50%;
+              "
+            >
+              <style>
+                @keyframes loading {
+                  0% {
+                    transform: translateX(-100%);
+                  }
+                  50% {
+                    transform: translateX(0%);
+                  }
+                  100% {
+                    transform: translateX(100%);
+                  }
+                }
+              </style>
+            </div>
+          </div>
+          <p
+            style="
+              font-size: 12px;
+              color: var(--color-text-tertiary);
+              margin-top: 8px;
+              text-align: center;
+            "
+            data-i18n="modal_local_progress"
+          >
+            Téléchargement en cours...
+          </p>
+        </div>
+
+        <div class="confirm-buttons">
+          <button
+            class="button confirm-button cancel"
+            id="local-model-cancel-btn"
+            data-i18n="btn_cancel"
+          >
+            Annuler
+          </button>
+          <button
+            class="button primary confirm-button"
+            id="local-model-download-btn"
+            data-i18n="btn_download_install"
+          >
+            Télécharger et installer
+          </button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

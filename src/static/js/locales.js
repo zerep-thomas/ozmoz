@@ -201,6 +201,21 @@ window.locales = {
     loading: "Chargement...",
     no_models: "Aucun modèle",
     error_loading: "Erreur",
+
+    // --- Local Model Modal ---
+    modal_local_title: "Téléchargement Requis",
+    modal_local_desc:
+      "Pour utiliser la transcription hors-ligne, le modèle Whisper V3 Turbo doit être téléchargé.",
+    modal_local_size: "Taille : ~1.8 GB",
+    modal_local_progress:
+      "Téléchargement en cours (cela peut prendre quelques minutes)...",
+    btn_download_install: "Télécharger & Installer",
+
+    // --- Model Badges ---
+    badge_downloading: "Téléchargement...",
+    badge_ready_local: "Local",
+    badge_need_download: "À télécharger",
+    badge_standard: "Standard",
   },
   en: {
     lang_autodetect: "Auto Detect",
@@ -396,6 +411,21 @@ window.locales = {
     loading: "Loading...",
     no_models: "No models",
     error_loading: "Error",
+
+    // --- Local Model Modal ---
+    modal_local_title: "Download Required",
+    modal_local_desc:
+      "To use offline transcription, the Whisper V3 Turbo model must be downloaded.",
+    modal_local_size: "Size: ~1.8 GB",
+    modal_local_progress:
+      "Downloading in progress (this may take a few minutes)...",
+    btn_download_install: "Download & Install",
+
+    // --- Model Badges ---
+    badge_downloading: "Downloading...",
+    badge_ready_local: "Local",
+    badge_need_download: "Download",
+    badge_standard: "Standard",
   },
   es: {
     lang_autodetect: "Detección automática",
@@ -592,5 +622,20 @@ window.locales = {
     loading: "Cargando...",
     no_models: "Sin modelos",
     error_loading: "Error",
+
+    // --- Local Model Modal ---
+    modal_local_title: "Descarga requerida",
+    modal_local_desc:
+      "Para usar la transcripción sin conexión, el modelo Whisper V3 Turbo debe descargarse.",
+    modal_local_size: "Tamaño: ~1.8 GB",
+    modal_local_progress:
+      "Descarga en curso (esto puede tardar unos minutos)...",
+    btn_download_install: "Descargar e instalar",
+
+    // --- Model Badges ---
+    badge_downloading: "Descargando...",
+    badge_ready_local: "Local",
+    badge_need_download: "Para descargar",
+    badge_standard: "Estándar",
   },
 };

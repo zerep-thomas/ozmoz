@@ -408,7 +408,7 @@ class SystemTrayManager:
     def _show_about(self) -> None:
         """Opens the About page in the default web browser."""
         try:
-            webbrowser.open("https://ozmoz.me")
+            webbrowser.open("https://github.com/zerep-thomas/ozmoz")
         except Exception:
             pass
 

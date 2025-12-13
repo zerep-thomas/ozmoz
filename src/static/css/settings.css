@@ -1134,7 +1134,7 @@ select:focus,
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 999;
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2369,6 +2369,17 @@ li:has(> p) > p {
 #save-api-keys-btn:hover {
   transform: translateY(-2px);
   background-color: #8a4be0;
+}
+
+.progress-container {
+  width: 100%;
+  background-color: var(--color-input-bg);
+  border-radius: 8px;
+  margin-top: 15px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  position: relative;
+  height: 24px;
 }
 
 @media (min-width: 880px) {

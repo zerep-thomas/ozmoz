@@ -1,7 +1,12 @@
-/* --- static/js/settings/api-config.js --- */
+/* --- src/static/js/settings/api-config.js --- */
 
 let initialApiState = {};
 
+/**
+ * Updates the visual display of a custom select dropdown.
+ * @param {string} containerId
+ * @param {string} newValue
+ */
 window._updateCustomSelectDisplay = (containerId, newValue) => {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -30,7 +35,81 @@ window._updateCustomSelectDisplay = (containerId, newValue) => {
   }
 };
 
-// --- Language Dropdown Logic ---
+/**
+ * Initializes event listeners for the Local Model download modal.
+ * Designed to be safe against multiple initializations.
+ */
+window.initLocalModelListeners = () => {
+  const backdrop = document.getElementById("local-model-modal-backdrop");
+  const cancelBtn = document.getElementById("local-model-cancel-btn");
+  const downloadBtn = document.getElementById("local-model-download-btn");
+
+  if (cancelBtn) {
+    const newCancelBtn = cancelBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+    newCancelBtn.addEventListener("click", () => {
+      if (backdrop) {
+        backdrop.style.display = "none";
+        backdrop.classList.remove("visible");
+      }
+    });
+  }
+
+  if (downloadBtn) {
+    const newDownloadBtn = downloadBtn.cloneNode(true);
+    downloadBtn.parentNode.replaceChild(newDownloadBtn, downloadBtn);
+
+    newDownloadBtn.addEventListener("click", () => {
+      const progress = document.getElementById("local-download-progress");
+      const currentBtn = document.getElementById("local-model-download-btn");
+      const currentCancel = document.getElementById("local-model-cancel-btn");
+
+      if (currentBtn) currentBtn.style.display = "none";
+      if (currentCancel) currentCancel.style.display = "none";
+      if (progress) progress.style.display = "block";
+
+      window.pywebview.api.install_local_model();
+    });
+  }
+};
+
+/**
+ * Callback exposed to the Python backend to signal download completion.
+ * @param {string} status - 'success' or 'error'.
+ */
+window.onLocalModelInstallFinished = (status) => {
+  const backdrop = document.getElementById("local-model-modal-backdrop");
+  const downloadBtn = document.getElementById("local-model-download-btn");
+  const cancelBtn = document.getElementById("local-model-cancel-btn");
+  const progress = document.getElementById("local-download-progress");
+
+  if (backdrop) {
+    backdrop.style.display = "none";
+    backdrop.classList.remove("visible");
+  }
+
+  setTimeout(() => {
+    if (downloadBtn) downloadBtn.style.display = "block";
+    if (cancelBtn) cancelBtn.style.display = "block";
+    if (progress) progress.style.display = "none";
+  }, 500);
+
+  if (status === "success") {
+    const select = document.getElementById("audio-model-select");
+    if (select) {
+      select.value = "local-whisper-large-v3-turbo";
+      window.pywebview.api.set_audio_model("local-whisper-large-v3-turbo");
+      window.populateAudioModelDropdown();
+    }
+  } else {
+    window.showToast("Download failed. Check logs.", "error");
+  }
+};
+
+/**
+ * Populates the language selection dropdown.
+ */
 window.populateLanguageDropdown = async () => {
   const nativeSelect = document.getElementById("language-select");
   const itemsContainer = document.getElementById("language-select-items");
@@ -45,16 +124,13 @@ window.populateLanguageDropdown = async () => {
   languages.forEach((lang) => {
     const translatedName = window.t(lang.key);
 
-    // Native Option
     const option = document.createElement("option");
     option.value = lang.value;
     option.id = `${lang.value}-language-option`;
     option.textContent = translatedName;
     nativeSelect.appendChild(option);
 
-    // Custom Item
     const div = document.createElement("div");
-
     const nameSpan = document.createElement("span");
     nameSpan.className = "model-name-display";
     nameSpan.textContent = translatedName;
@@ -62,7 +138,6 @@ window.populateLanguageDropdown = async () => {
     div.appendChild(nameSpan);
 
     if (lang.flag) {
-      // Flags are trusted HTML from constants
       const flagSpan = document.createElement("span");
       flagSpan.innerHTML = ` ${lang.flag}`;
       nameSpan.appendChild(flagSpan);
@@ -101,10 +176,12 @@ window.populateLanguageDropdown = async () => {
   newSelect.addEventListener("change", handleLanguageChange);
 };
 
+/**
+ * Handles changes to the language selection.
+ * @param {Event} event - The change event.
+ */
 async function handleLanguageChange(event) {
   const newLanguage = event.target.value;
-  console.log(`Language changed to: ${newLanguage}`);
-
   window.applyTranslations(newLanguage);
 
   const itemsContainer = document.getElementById("language-select-items");
@@ -112,9 +189,7 @@ async function handleLanguageChange(event) {
     itemsContainer.innerHTML = "";
     window.LANGUAGES_DATA.forEach((lang) => {
       const translatedName = window.t(lang.key);
-
       const div = document.createElement("div");
-
       const nameSpan = document.createElement("span");
       nameSpan.className = "model-name-display";
       nameSpan.textContent = translatedName;
@@ -162,12 +237,11 @@ async function handleLanguageChange(event) {
     if (!window.isApiReady()) return;
 
     const response = await window.pywebview.api.set_language(newLanguage);
-
     const currentAudioModel =
       document.getElementById("audio-model-select").value;
     if (response.final_audio_model !== currentAudioModel) {
       window.showToast(
-        `Mode commuté vers ${response.final_audio_model} (Compatibilité).`,
+        `Mode switched to ${response.final_audio_model} (Compatibility).`,
         "info"
       );
     }
@@ -179,11 +253,13 @@ async function handleLanguageChange(event) {
     window.loadDashboardStats();
     window.populateModelDropdown();
   } catch (error) {
-    console.error("Error setting language:", error);
+    console.error("Language switch error:", error);
   }
 }
 
-// --- Audio Model Logic ---
+/**
+ * Toggles visibility of the auto-detect option based on model capabilities.
+ */
 async function handleAudioModelChange() {
   const audioModelSelect = document.getElementById("audio-model-select");
   const autodetectOption = document.getElementById(
@@ -194,13 +270,21 @@ async function handleAudioModelChange() {
 
   const selectedAudioModel = audioModelSelect.value;
   const isWhisper =
-    selectedAudioModel && selectedAudioModel.startsWith("whisper");
+    selectedAudioModel &&
+    (selectedAudioModel.startsWith("whisper") ||
+      selectedAudioModel === "local-turbo");
 
   if (autodetectOption) {
     autodetectOption.style.display = isWhisper ? "block" : "none";
   }
 }
 
+/**
+ * Populates the audio model dropdown.
+ * Handles:
+ * 1. Remote models (Groq/Deepgram)
+ * 2. Local model (Whisper Turbo) with installation status check
+ */
 window.populateAudioModelDropdown = async () => {
   const nativeSelect = document.getElementById("audio-model-select");
   const selectedDisplay = document.getElementById(
@@ -209,16 +293,23 @@ window.populateAudioModelDropdown = async () => {
   const itemsContainer = document.getElementById("audio-model-select-items");
 
   if (!nativeSelect) return;
-  if (nativeSelect.dataset.loading === "true") return;
 
+  if (!window._localListenersInit) {
+    window.initLocalModelListeners();
+    window._localListenersInit = true;
+  }
+
+  if (nativeSelect.dataset.loading === "true") return;
   nativeSelect.dataset.loading = "true";
+
   itemsContainer.innerHTML = "";
   nativeSelect.innerHTML = "";
 
   try {
-    const [audioModels, keyStatus] = await Promise.all([
+    const [audioModels, keyStatus, localStatus] = await Promise.all([
       window.pywebview.api.get_translated_audio_models(),
       window.pywebview.api.get_providers_status(),
+      window.pywebview.api.get_local_model_status(),
     ]);
 
     const currentAudioModel =
@@ -226,9 +317,6 @@ window.populateAudioModelDropdown = async () => {
     const currentLangState = window.getCurrentLanguage() || "en";
     const langToCheck =
       currentLangState === "autodetect" ? "en" : currentLangState;
-
-    console.log(`Populating Audio Models. Current Global Lang: ${langToCheck}`);
-
     const supported = window.NOVA3_SUPPORTED_LANGUAGES || ["en"];
 
     audioModels.forEach((model) => {
@@ -238,6 +326,10 @@ window.populateAudioModelDropdown = async () => {
           supported.includes(langToCheck) || supported.includes(langBase);
         if (!isSupported) return;
       }
+
+      const isLocal = model.provider === "local";
+      const isLocalInstalled = localStatus.installed;
+      const isDownloading = localStatus.loading;
 
       let isLocked = false;
       if (model.provider === "groq" && !keyStatus.groq_audio) isLocked = true;
@@ -250,14 +342,27 @@ window.populateAudioModelDropdown = async () => {
       nativeSelect.appendChild(nativeOption);
 
       const itemDiv = document.createElement("div");
-
       const nameSpan = document.createElement("span");
       nameSpan.className = "model-name-display";
       nameSpan.textContent = model.name;
 
       const badgeSpan = document.createElement("span");
       badgeSpan.className = "model-feature-badge";
-      badgeSpan.textContent = model.advantage || "Standard";
+
+      if (isLocal) {
+        if (isDownloading) {
+          badgeSpan.textContent = window.t("badge_downloading");
+          badgeSpan.style.backgroundColor = "var(--color-accent)";
+        } else if (isLocalInstalled) {
+          badgeSpan.textContent = window.t("badge_ready_local");
+          badgeSpan.style.backgroundColor = "var(--color-accent)";
+        } else {
+          badgeSpan.textContent = window.t("badge_need_download");
+          badgeSpan.style.backgroundColor = "var(--color-text-tertiary)";
+        }
+      } else {
+        badgeSpan.textContent = model.advantage || window.t("badge_standard");
+      }
 
       if (isLocked) itemDiv.classList.add("option-disabled", "locked-by-key");
 
@@ -269,11 +374,24 @@ window.populateAudioModelDropdown = async () => {
 
       itemDiv.addEventListener("click", function (e) {
         e.stopPropagation();
+
+        if (isLocal && !isLocalInstalled && !isDownloading) {
+          const modal = document.getElementById("local-model-modal-backdrop");
+          if (modal) {
+            modal.style.display = "flex";
+            setTimeout(() => modal.classList.add("visible"), 10);
+          }
+          return;
+        }
+        if (isLocal && isDownloading) {
+          window.showToast(window.t("badge_downloading"), "info");
+          return;
+        }
+
         if (this.classList.contains("locked-by-key")) {
           window.showMissingKeyModal(this.dataset.provider);
           return;
         }
-
         const modelValue = this.dataset.value;
         nativeSelect.value = modelValue;
         window.pywebview.api.set_audio_model(modelValue);
@@ -291,7 +409,9 @@ window.populateAudioModelDropdown = async () => {
         );
         this.classList.add("same-as-selected");
 
-        handleAudioModelChange();
+        if (typeof handleAudioModelChange === "function") {
+          handleAudioModelChange();
+        }
       });
       itemsContainer.appendChild(itemDiv);
     });
@@ -305,10 +425,11 @@ window.populateAudioModelDropdown = async () => {
         nativeSelect.value = currentAudioModel;
       } else if (nativeSelect.options.length > 0) {
         for (let i = 0; i < nativeSelect.options.length; i++) {
-          if (nativeSelect.options[i].disabled) continue;
-          nativeSelect.value = nativeSelect.options[i].value;
-          window.pywebview.api.set_audio_model(nativeSelect.value);
-          break;
+          if (!nativeSelect.options[i].disabled) {
+            nativeSelect.value = nativeSelect.options[i].value;
+            window.pywebview.api.set_audio_model(nativeSelect.value);
+            break;
+          }
         }
       }
       window._updateCustomSelectDisplay(
@@ -317,13 +438,17 @@ window.populateAudioModelDropdown = async () => {
       );
     }
   } catch (error) {
-    console.error("Error Audio Dropdown:", error);
+    console.error("Error populating Audio Dropdown:", error);
   } finally {
     nativeSelect.dataset.loading = "false";
   }
 };
 
-// --- Text Model Dropdown ---
+/**
+ * Populates the Text AI Model dropdown.
+ * @param {string} [selectElementId="model-select"]
+ * @param {string|null} [valueToPreselect=null]
+ */
 window.populateModelDropdown = async (
   selectElementId = "model-select",
   valueToPreselect = null
@@ -370,7 +495,6 @@ window.populateModelDropdown = async (
       nativeSelect.appendChild(nativeOption);
 
       const itemDiv = document.createElement("div");
-
       const nameSpan = document.createElement("span");
       nameSpan.className = "model-name-display";
       nameSpan.textContent = model.name;
@@ -462,7 +586,9 @@ window.populateModelDropdown = async (
   }
 };
 
-// --- API Keys Management ---
+/**
+ * Loads API key configuration and populates input fields.
+ */
 window.loadApiConfiguration = async () => {
   if (!window.isApiReady()) return;
 
@@ -519,6 +645,9 @@ function handleApiInputChange(e) {
   else saveContainer.classList.remove("visible");
 }
 
+/**
+ * Saves entered API keys to the backend.
+ */
 window.saveApiKeys = () => {
   const inputs = document.querySelectorAll(".api-input");
   const saveBtn = document.getElementById("save-api-keys-btn");
@@ -563,6 +692,9 @@ window.saveApiKeys = () => {
     });
 };
 
+/**
+ * Updates UI state based on available API keys.
+ */
 window.updateTogglesAndModelsState = () => {
   const textModelOptions = document.querySelectorAll(
     "#custom-model-select-container .select-items div, #custom-agent-model-select-container .select-items div"
@@ -570,11 +702,13 @@ window.updateTogglesAndModelsState = () => {
 
   textModelOptions.forEach((option) => {
     const isKeyMissing = option.classList.contains("locked-by-key");
-    const isDisabled = isKeyMissing;
-    option.classList.toggle("option-disabled", isDisabled);
+    option.classList.toggle("option-disabled", isKeyMissing);
   });
 };
 
+/**
+ * Filters agent models based on screen vision capabilities.
+ */
 window.updateAgentModelAvailability = () => {
   const screenVisionToggle = document.getElementById("agent-screen-vision");
   const agentModelOptions = document.querySelectorAll(
