@@ -35,6 +35,7 @@ if sys.platform == "win32":
 
     subprocess.Popen = _PatchedPopen
 
+
 from deepgram import DeepgramClient, FileSource, PrerecordedOptions
 from groq import Groq
 from text_to_num.transforms import alpha2digit
@@ -67,7 +68,6 @@ class AudioManager:
         self.app_state = app_state
         self.sound_manager = sound_manager
         self.os_interface = os_interface
-
         self._pyaudio_instance: Optional[pyaudio.PyAudio] = None
         self._audio_stream: Optional[pyaudio.Stream] = None
         self._original_volume: float = 1.0
@@ -566,6 +566,24 @@ class TranscriptionManager:
             transcribed_text = self.transcription_service.transcribe(
                 self.audio_file, self.app_state.language, rec_duration
             )
+
+            if transcribed_text == "Error: Local model not found":
+                pyperclip.copy("⚠️ Modèle local manquant. Voir Paramètres.")
+
+                if self.app_state.settings_window:
+                    self.app_state.settings_window.show()
+
+                    script = """
+                        window.dispatchEvent(new CustomEvent('pywebview', { detail: 'show_settings' }));
+                        setTimeout(() => {
+                            if(window.showLocalModelModal) {
+                                window.showLocalModelModal();
+                            }
+                        }, 500);
+                    """
+                    self.app_state.settings_window.evaluate_js(script)
+
+                return timing_tracker
 
             if not transcribed_text or transcribed_text.startswith("Error"):
                 pyperclip.copy("Error: Transcription failed.")

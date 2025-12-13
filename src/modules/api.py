@@ -997,16 +997,6 @@ class API:
                 value = data.get(html_id, "").strip()
                 clean_data[internal_id] = value
 
-            has_audio = bool(clean_data.get("groq_audio")) or bool(
-                clean_data.get("deepgram")
-            )
-
-            if not has_audio:
-                return {
-                    "success": False,
-                    "error": "Audio provider (Groq or Deepgram) is required for operation.",
-                }
-
             success = self._config_manager.credential_manager.save_credentials(
                 clean_data
             )

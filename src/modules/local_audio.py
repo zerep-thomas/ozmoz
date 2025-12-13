@@ -1,6 +1,4 @@
 """
-src/modules/local_audio.py
-
 Handles local speech-to-text inference using Faster-Whisper.
 Manages portable CUDA setup, model lifecycle, and robust fallback strategies.
 Optimized for maximum throughput and low latency.
@@ -103,6 +101,10 @@ class LocalWhisperManager:
         logging.info(f"[LocalWhisper] Engine ready on: {device.upper()}")
 
     def load(self) -> bool:
+        if not self.is_installed():
+            logging.info("[LocalWhisper] Model not installed. Skipping auto-load.")
+            return False
+
         if self.model is not None:
             return True
 
@@ -143,6 +145,9 @@ class LocalWhisperManager:
             return False
 
     def transcribe(self, audio_path: str, lang: str = "fr") -> str:
+        if not self.is_installed():
+            return "Error: Local model not found"
+
         if self.model is None:
             if not self.load():
                 return "Error: Local model failed to load (Check logs/hardware)."

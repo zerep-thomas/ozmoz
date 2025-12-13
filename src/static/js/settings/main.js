@@ -156,7 +156,6 @@ window.setActiveSection = async (sectionId) => {
   if (sectionId === "general") {
     const activeTab = document.querySelector("#general .internal-tab.active");
     const tabName = activeTab ? activeTab.dataset.tab : "preferences";
-
     if (tabName === "api") window.loadApiConfiguration();
     if (tabName === "preferences") {
       await window.populateLanguageDropdown();
@@ -222,6 +221,22 @@ window.hideMissingKeyModalAndGoToApi = () => {
   document.querySelector('.internal-tab[data-tab="api"]')?.click();
 };
 
+window.showLocalModelModal = () => {
+  const backdrop = document.getElementById("local-model-modal-backdrop");
+  if (backdrop) {
+    backdrop.style.display = "flex";
+    setTimeout(() => backdrop.classList.add("visible"), 10);
+  }
+};
+
+window.hideLocalModelModal = () => {
+  const backdrop = document.getElementById("local-model-modal-backdrop");
+  if (backdrop) {
+    backdrop.classList.remove("visible");
+    setTimeout(() => (backdrop.style.display = "none"), 200);
+  }
+};
+
 // --- Initialization ---
 
 window.initApp = async () => {
@@ -234,7 +249,6 @@ window.initApp = async () => {
     try {
       const lang = await window.pywebview.api.get_current_language();
       window.applyTranslations(lang || "en");
-
       await window.populateLanguageDropdown();
       window._updateCustomSelectDisplay(
         "custom-language-select-container",
@@ -275,7 +289,6 @@ window.initApp = async () => {
       parent
         .querySelectorAll(".internal-tab-content")
         .forEach((c) => c.classList.remove("active"));
-
       const content = document.getElementById(`${tab.dataset.tab}-content`);
       if (content) content.classList.add("active");
 
