@@ -292,6 +292,9 @@ class OzmozApp:
         Execute background tasks after UI initialization.
         Warms up services and opens settings if configured.
         """
+        log_perf("Background: Initializing Audio & Sound...")
+        self.audio_manager.initialize()
+        self.sound_manager._initialize()
         self.lifecycle_manager.run_background_startup_tasks()
         self.audio_manager.warmup()
         self.transcription_service.warmup()
@@ -331,13 +334,6 @@ class OzmozApp:
         try:
             self.ui_resource_loader.load_html_content()
             self.config_manager.load_local_settings()
-
-            log_perf("Config & UI loaded")
-
-            self.audio_manager.initialize()
-            self.sound_manager._initialize()
-
-            log_perf("Audio & Sound internal init")
 
             self.system_tray_manager.run_in_thread()
             time.sleep(0.2)
