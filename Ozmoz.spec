@@ -25,6 +25,7 @@ hidden_imports = [
 datas = [
     ('src/templates', 'src/templates'),
     ('src/static', 'src/static'),
+    ('bin', 'bin'),
     ('README.md', '.'),
     ('LICENSE', '.'),
 ]
