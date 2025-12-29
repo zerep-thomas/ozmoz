@@ -1,259 +1,32 @@
-/* --- static/js/settings/main.js --- */
+/* --- src/static/js/settings/main.js --- */
 
-// --- Hotkey Logic ---
-let capturedHotkey = null;
-let isCapturingHotkey = false;
 let isAppInitialized = false;
 
-window.openHotkeyModal = (buttonElement) => {
-  const action = buttonElement.getAttribute("data-action");
-  const modal = document.getElementById("hotkey-modal-backdrop");
-  const titleDisplay = document.getElementById("hotkey-action-name-display");
-  const captureDisplay = document.getElementById("captured-hotkey-display");
-  const saveButton = document.getElementById("hotkey-modal-save-btn");
-  const actionNameInput = document.getElementById("hotkey-modal-action-name");
-
-  if (!modal) return;
-
-  if (window.isApiReady()) {
-    window.pywebview.api.temporarily_disable_all_hotkeys();
-  }
-
-  titleDisplay.textContent = "";
-  actionNameInput.value = action;
-  capturedHotkey = null;
-  isCapturingHotkey = true;
-
-  captureDisplay.textContent = window.t("modal_waiting_input");
-  captureDisplay.classList.add("placeholder");
-  saveButton.disabled = true;
-
-  modal.style.display = "flex";
-  setTimeout(() => modal.classList.add("visible"), 10);
-
-  document.addEventListener("keydown", window.handleHotkeyCapture);
-};
-
-window.handleHotkeyCapture = (event) => {
-  if (!isCapturingHotkey) return;
-  event.preventDefault();
-  if (event.key === "Escape") {
-    window.cancelHotkeyCapture();
-    return;
-  }
-
-  const parts = [];
-  if (event.ctrlKey) parts.push("ctrl");
-  if (event.altKey) parts.push("alt");
-  if (event.shiftKey) parts.push("shift");
-
-  let keyName = event.key.toLowerCase();
-  if (keyName === " ") keyName = "space";
-  if (
-    !["control", "alt", "shift", "meta"].includes(keyName) &&
-    !parts.includes(keyName)
-  ) {
-    parts.push(keyName);
-  }
-
-  if (parts.length > 0) {
-    capturedHotkey = parts.join("+");
-    document.getElementById("captured-hotkey-display").textContent =
-      capturedHotkey;
-    document.getElementById("hotkey-modal-save-btn").disabled = false;
-  }
-};
-
-window.saveCapturedHotkey = () => {
-  const action = document.getElementById("hotkey-modal-action-name").value;
-  if (!capturedHotkey || !action) return;
-
-  document.removeEventListener("keydown", window.handleHotkeyCapture);
-  isCapturingHotkey = false;
-
-  if (window.isApiReady()) {
-    window.pywebview.api.set_hotkey(action, capturedHotkey).then((res) => {
-      if (res.success) {
-        window.updateHotkeyDisplay(res.new_hotkeys);
-        window.cancelHotkeyCapture();
-      } else {
-        alert("Error saving hotkey");
-      }
-    });
-  }
-};
-
-window.cancelHotkeyCapture = () => {
-  document.removeEventListener("keydown", window.handleHotkeyCapture);
-  isCapturingHotkey = false;
-  const modal = document.getElementById("hotkey-modal-backdrop");
-  if (modal) {
-    modal.classList.remove("visible");
-    setTimeout(() => (modal.style.display = "none"), 200);
-  }
-  if (window.isApiReady()) window.pywebview.api.restore_all_hotkeys();
-};
-
-window.updateHotkeyDisplay = (hotkeys) => {
-  if (!hotkeys) return;
-  for (const [key, value] of Object.entries(hotkeys)) {
-    const el = document.getElementById(`hotkey-display-${key}`);
-    if (el) el.textContent = value;
-  }
-};
-
-window.initializeControlsTab = () => {
-  console.log("Initializing Controls Tab");
-  if (!window.isApiReady()) {
-    document.getElementById("hotkey-display-toggle_visibility").textContent =
-      "Error";
-    return;
-  }
-  window.pywebview.api.get_hotkeys().then((hotkeys) => {
-    if (hotkeys) {
-      window.updateHotkeyDisplay(hotkeys);
-    }
-  });
-};
-
-// --- Navigation Logic ---
-window.setActiveSection = async (sectionId) => {
-  document
-    .querySelectorAll(".settings-section")
-    .forEach((section) => section.classList.remove("active"));
-  document
-    .querySelectorAll(".sidebar-item")
-    .forEach((item) => item.classList.remove("active"));
-
-  const sectionElement = document.getElementById(sectionId);
-  const sidebarItem = document.querySelector(
-    `.sidebar-item[data-target="${sectionId}"]`
-  );
-
-  if (sectionElement) sectionElement.classList.add("active");
-  if (sidebarItem) sidebarItem.classList.add("active");
-
-  if (sectionId === "logs") {
-    window.loadLogs();
-    window.startLogPolling();
-  } else {
-    window.stopLogPolling();
-  }
-
-  if (sectionId === "history") window.loadTranscripts();
-  if (sectionId === "replacement") {
-    window.loadReplacements();
-    window.setupReplacementFilterListener();
-  }
-  if (sectionId === "agent") {
-    window.loadAgents();
-    window.setupAgentFilterListener();
-  }
-  if (sectionId === "home") {
-    window.loadDashboardStats();
-    window.loadActivityChartData();
-  }
-  if (sectionId === "general") {
-    const activeTab = document.querySelector("#general .internal-tab.active");
-    const tabName = activeTab ? activeTab.dataset.tab : "preferences";
-    if (tabName === "api") window.loadApiConfiguration();
-    if (tabName === "preferences") {
-      await window.populateLanguageDropdown();
-      await window.populateAudioModelDropdown();
-      window.populateModelDropdown();
-    }
-    if (tabName === "controls") {
-      window.initializeControlsTab();
-    }
-  }
-};
-
-// --- Modal Helpers ---
-
-window.showIncompatibleModelModal = (reason) => {
-  const backdrop = document.getElementById("incompatible-model-modal-backdrop");
-  const textElement = document.getElementById("incompatible-model-modal-text");
-  if (!backdrop || !textElement) return;
-  if (reason === "web") {
-    textElement.textContent = window.t("model_incompatible_web");
-  } else if (reason === "vision") {
-    textElement.textContent = window.t("model_incompatible_vision");
-  } else {
-    textElement.textContent = window.t("model_incompatible_generic");
-  }
-  backdrop.style.display = "flex";
-  setTimeout(() => backdrop.classList.add("visible"), 10);
-};
-
-window.hideIncompatibleModelModal = () => {
-  document
-    .getElementById("incompatible-model-modal-backdrop")
-    ?.classList.remove("visible");
-  setTimeout(() => {
-    const el = document.getElementById("incompatible-model-modal-backdrop");
-    if (el) el.style.display = "none";
-  }, 200);
-};
-
-window.showMissingKeyModal = (provider) => {
-  const backdrop = document.getElementById("missing-key-modal-backdrop");
-  const text = document.getElementById("missing-key-modal-text");
-  if (text) {
-    const msg = window.t("missing_api_key_msg").replace("{provider}", provider);
-    text.innerHTML = msg;
-  }
-  if (backdrop) {
-    backdrop.style.display = "flex";
-    setTimeout(() => backdrop.classList.add("visible"), 10);
-  }
-};
-
-window.hideMissingKeyModal = () => {
-  const el = document.getElementById("missing-key-modal-backdrop");
-  el?.classList.remove("visible");
-  setTimeout(() => {
-    if (el) el.style.display = "none";
-  }, 200);
-};
-
-window.hideMissingKeyModalAndGoToApi = () => {
-  window.hideMissingKeyModal();
-  document.querySelector('.internal-tab[data-tab="api"]')?.click();
-};
-
-window.showLocalModelModal = () => {
-  const backdrop = document.getElementById("local-model-modal-backdrop");
-  if (backdrop) {
-    backdrop.style.display = "flex";
-    setTimeout(() => backdrop.classList.add("visible"), 10);
-  }
-};
-
-window.hideLocalModelModal = () => {
-  const backdrop = document.getElementById("local-model-modal-backdrop");
-  if (backdrop) {
-    backdrop.classList.remove("visible");
-    setTimeout(() => (backdrop.style.display = "none"), 200);
-  }
-};
-
-// --- Initialization ---
-
+/**
+ * Main Initialization Function.
+ * Called when the PyWebView API is ready or DOM is loaded.
+ */
 window.initApp = async () => {
   if (isAppInitialized) return;
   isAppInitialized = true;
 
+  // 1. Attach Event Listeners to DOM elements
   attachGlobalListeners();
 
+  // 2. Initialize Data from Backend
   if (window.isApiReady()) {
     try {
       const lang = await window.pywebview.api.get_current_language();
       window.applyTranslations(lang || "en");
+
       await window.populateLanguageDropdown();
       window._updateCustomSelectDisplay(
         "custom-language-select-container",
         lang || "en"
       );
+
+      // Trigger automatic update check
+      window.checkForUpdates();
 
       await window.populateAudioModelDropdown();
       await window.populateModelDropdown();
@@ -269,19 +42,21 @@ window.initApp = async () => {
     }
   }
 
+  // 3. Initialize UI Components
   window.initCustomSelects();
 
-  // Sidebar Listeners
+  // 4. Attach Sidebar Navigation
   document.querySelectorAll(".sidebar-item").forEach((item) => {
     item.addEventListener("click", () => {
       window.setActiveSection(item.getAttribute("data-target"));
     });
   });
 
-  // Tab Listeners
+  // 5. Attach Internal Tabs Navigation (General section)
   document.querySelectorAll(".internal-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       const parent = tab.closest(".settings-section");
+      // UI Update
       parent
         .querySelectorAll(".internal-tab")
         .forEach((t) => t.classList.remove("active"));
@@ -292,13 +67,14 @@ window.initApp = async () => {
       const content = document.getElementById(`${tab.dataset.tab}-content`);
       if (content) content.classList.add("active");
 
+      // Logic Trigger
       if (tab.dataset.tab === "api") window.loadApiConfiguration();
       if (tab.dataset.tab === "preferences") window.populateModelDropdown();
       if (tab.dataset.tab === "controls") window.initializeControlsTab();
     });
   });
 
-  // Toggles and Inputs
+  // 6. Attach Toggles Logic
   const historySortToggle = document.getElementById("history-sort-toggle");
   if (historySortToggle) {
     historySortToggle.addEventListener("change", function () {
@@ -319,6 +95,7 @@ window.initApp = async () => {
     });
   }
 
+  // 7. Inputs UX (Enter key focus)
   const agentNameInput = document.getElementById("agent-name");
   const agentTriggerInput = document.getElementById("agent-trigger");
   const agentPromptInput = document.getElementById("agent-prompt");
@@ -333,8 +110,8 @@ window.initApp = async () => {
     });
   }
 
+  // 8. Final UI Reveal
   window.setActiveSection("home");
-
   const container = document.getElementById("container");
   if (container) container.classList.add("fade-in");
 
@@ -347,18 +124,21 @@ window.initApp = async () => {
   }
 };
 
+/**
+ * Attaches all click events for buttons throughout the Settings UI.
+ */
 function attachGlobalListeners() {
-  // API
+  // --- API ---
   document
     .getElementById("save-api-keys-btn")
     ?.addEventListener("click", window.saveApiKeys);
 
-  // Replacements
+  // --- Replacements ---
   document
     .getElementById("add-replacement-btn")
     ?.addEventListener("click", window.addReplacement);
 
-  // Agents
+  // --- Agents ---
   document
     .getElementById("create-agent-btn")
     ?.addEventListener("click", () => window.showAgentModal());
@@ -379,12 +159,12 @@ function attachGlobalListeners() {
     .getElementById("cancel-delete-agent-btn")
     ?.addEventListener("click", window.hideDeleteAgentModal);
 
-  // History
+  // --- History ---
   document
     .getElementById("clear-history-btn")
     ?.addEventListener("click", window.confirmClearHistory);
 
-  // Modals & Misc
+  // --- Modals & Misc ---
   document
     .getElementById("conflict-modal-ok-btn")
     ?.addEventListener("click", window.hideConflictModal);
@@ -398,7 +178,7 @@ function attachGlobalListeners() {
     .getElementById("missing-key-close-btn")
     ?.addEventListener("click", window.hideMissingKeyModal);
 
-  // Logs
+  // --- Logs ---
   document
     .getElementById("refresh-logs-btn")
     ?.addEventListener("click", window.loadLogs);
@@ -409,7 +189,7 @@ function attachGlobalListeners() {
     .getElementById("log-search-input")
     ?.addEventListener("input", window.renderFilteredLogs);
 
-  // Hotkeys
+  // --- Hotkeys ---
   document.querySelectorAll(".hotkey-edit-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => window.openHotkeyModal(e.target));
   });
@@ -420,7 +200,7 @@ function attachGlobalListeners() {
     .getElementById("hotkey-modal-save-btn")
     ?.addEventListener("click", window.saveCapturedHotkey);
 
-  // Toggles
+  // --- Toggles ---
   const devModeToggle = document.getElementById("toggle-dev-mode");
   if (devModeToggle)
     devModeToggle.addEventListener("change", (e) =>
@@ -444,8 +224,44 @@ function attachGlobalListeners() {
     muteToggle.addEventListener("change", (e) =>
       window.pywebview.api.mute_sound(e.target.checked)
     );
+
+  // --- Updates ---
+  // 1. Sidebar button click -> Open modal
+  const sidebarUpdateBtn = document.getElementById("update-app-sidebar-button");
+  if (sidebarUpdateBtn) {
+    sidebarUpdateBtn.addEventListener("click", () => {
+      const modal = document.getElementById("update-confirm-modal-backdrop");
+      if (modal) {
+        modal.style.display = "flex";
+        setTimeout(() => modal.classList.add("visible"), 10);
+      }
+    });
+  }
+
+  // 2. Confirm Update click -> Start download
+  const confirmUpdateBtn = document.getElementById("update-confirm-start");
+  if (confirmUpdateBtn) {
+    confirmUpdateBtn.addEventListener("click", window.handleUpdateConfirmation);
+  }
+
+  // 3. View Notes click -> Open Browser
+  const viewNotesBtn = document.getElementById("update-confirm-view-notes");
+  if (viewNotesBtn) {
+    viewNotesBtn.addEventListener("click", () => {
+      const modal = document.getElementById("update-confirm-modal-backdrop");
+      if (modal) {
+        modal.classList.remove("visible");
+        setTimeout(() => (modal.style.display = "none"), 200);
+      }
+      if (window.isApiReady())
+        window.pywebview.api.open_external_link(
+          "https://github.com/zerep-thomas/ozmoz/releases"
+        );
+    });
+  }
 }
 
+// Bootstrapping the application
 window.addEventListener("pywebviewready", window.initApp);
 setTimeout(() => {
   if (!isAppInitialized) window.initApp();

@@ -177,6 +177,10 @@ class UIResourceLoader:
                 "src/static/js/settings/replacements.js",
                 "src/static/js/settings/agents.js",
                 "src/static/js/settings/logs.js",
+                "src/static/js/settings/updates.js",
+                "src/static/js/settings/hotkeys.js",
+                "src/static/js/settings/modals.js",
+                "src/static/js/settings/navigation.js",
                 "src/static/js/settings/main.js",
             ]
 
