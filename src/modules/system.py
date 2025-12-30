@@ -108,16 +108,8 @@ class HotkeyManager:
         condition: Callable[[], bool] = lambda: True,
     ) -> Callable[[keyboard.KeyboardEvent], None]:
         """
-        Generates a callback that checks if modifier keys (Ctrl/Alt) are active
-        before executing the action.
-
-        Args:
-            combo (str): The key combination string (e.g., "ctrl+alt+k").
-            action (Callable[[], None]): The function to execute.
-            condition (Callable[[], bool], optional): A function returning True if execution is allowed.
-
-        Returns:
-            Callable[[keyboard.KeyboardEvent], None]: The event handler function.
+        Generates a callback that checks modifiers and executes the action
+        IN A SEPARATE THREAD to prevent Windows from killing the hook due to timeout.
         """
         modifiers: Set[str] = {
             part
@@ -127,7 +119,7 @@ class HotkeyManager:
 
         def handler(event: keyboard.KeyboardEvent) -> None:
             if all(keyboard.is_pressed(mod) for mod in modifiers) and condition():
-                action()
+                threading.Thread(target=action, daemon=True).start()
 
         return handler
 
@@ -364,7 +356,7 @@ class SystemHealthManager:
 
         # Regular checks
         while not stop_event.is_set():
-            if stop_event.wait(timeout=20):
+            if stop_event.wait(timeout=60):
                 break
 
             # Avoid reset if app is currently recording

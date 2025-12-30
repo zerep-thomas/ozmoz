@@ -2,7 +2,8 @@
 
 import sys
 import os
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+import importlib.util
+from PyInstaller.utils.hooks import collect_data_files, collect_all
 
 block_cipher = None
 
@@ -11,7 +12,31 @@ project_dir = os.getcwd()
 src_path = os.path.join(project_dir, 'src')
 icon_path = os.path.join(src_path, 'static', 'img', 'icons', 'icon.ico')
 
-# Hidden imports
+# --- DEFINITION DES DATAS ---
+datas = [
+    ('src/templates', 'src/templates'),
+    ('src/static', 'src/static'),
+    ('bin', 'bin'),
+    ('README.md', '.'),
+    ('LICENSE', '.'),
+]
+
+datas += collect_data_files('jaraco.text')
+datas += collect_data_files('setuptools')
+
+spec_setuptools = importlib.util.find_spec('setuptools')
+if spec_setuptools and spec_setuptools.origin:
+    setuptools_root = os.path.dirname(spec_setuptools.origin)
+    
+    lorem_source = os.path.join(setuptools_root, '_vendor', 'jaraco', 'text', 'Lorem ipsum.txt')
+    
+    if os.path.exists(lorem_source):
+        print(f"--- FIX APPLIQUÉ : Ajout de {lorem_source} ---")
+        datas.append((lorem_source, os.path.join('setuptools', '_vendor', 'jaraco', 'text')))
+    else:
+        print("--- ATTENTION : Impossible de trouver Lorem ipsum.txt dans setuptools ---")
+
+# --- HIDDEN IMPORTS ---
 hidden_imports = [
     'keyring.backends',
     'keyring.backends.Windows',
@@ -19,15 +44,9 @@ hidden_imports = [
     'pyaudio',
     'mss',
     'PySide6',
-]
-
-# Data files
-datas = [
-    ('src/templates', 'src/templates'),
-    ('src/static', 'src/static'),
-    ('bin', 'bin'),
-    ('README.md', '.'),
-    ('LICENSE', '.'),
+    'jaraco.text',
+    'inflect',
+    'pkg_resources.extern'
 ]
 
 # Analysis
@@ -60,7 +79,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,
+    upx=True, # Gardez True si ça marchait pour la taille, sinon mettez False pour tester
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -78,7 +97,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=False,
+    upx=True,
     upx_exclude=[],
     name='Ozmoz',
 )
