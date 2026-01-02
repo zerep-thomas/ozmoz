@@ -184,12 +184,29 @@ class UIResourceLoader:
                 "src/static/js/settings/main.js",
             ]
 
-            chart_library: str = self._read_resource(
-                "src/static/js/vendor/chart.min.js"
-            )
+            # --- Vendor Libraries Loading ---
+            # Order matters: Dependencies first
+            vendor_files = [
+                "src/static/js/vendor/chart.min.js",
+                "src/static/js/vendor/markdown-it.min.js",
+                "src/static/js/vendor/fuse.min.js",
+            ]
+
+            vendor_content = []
+            for v_file in vendor_files:
+                content = self._read_resource(v_file)
+                if content:
+                    vendor_content.append(content)
+                else:
+                    logging.warning(f"Failed to load vendor library: {v_file}")
+
+            combined_vendor = "\n".join(vendor_content)
+
+            # --- Application Logic Loading ---
             settings_logic: str = self._load_and_bundle_es6(settings_modules)
 
-            self.resources["settings_js"] = f"{chart_library}\n{settings_logic}"
+            # Combine Vendor libs + App logic
+            self.resources["settings_js"] = f"{combined_vendor}\n{settings_logic}"
 
             logging.debug("All UI resources (HTML/CSS/JS/Fonts) loaded.")
 

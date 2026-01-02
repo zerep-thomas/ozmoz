@@ -1,4 +1,4 @@
-/* --- static/js/settings/dashboard.js --- */
+/* --- src/static/js/settings/dashboard.js --- */
 
 let hasPlayedDashboardAnimation = false;
 
@@ -290,8 +290,17 @@ function renderActivityChart(
   }, 50);
 }
 
+/**
+ * Called by the Python backend when a new transcription is ready.
+ * Updates both the dashboard stats and the history list in real-time.
+ */
 window.refreshDashboardFull = () => {
-  console.log("Full dashboard refresh requested...");
+  console.log("Full dashboard refresh + History Sync requested...");
   window.loadDashboardStats();
   window.loadActivityChartData();
+
+  // Real-time history update: Re-load transcripts to show the new entry immediately
+  if (typeof window.loadTranscripts === "function") {
+    window.loadTranscripts();
+  }
 };

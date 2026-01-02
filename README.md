@@ -65,9 +65,10 @@ A hybrid architecture chosen for high performance and low memory footprint.
 - **Core:** Python 3.10+ (AI Orchestration & Backend Logic).
 - **Local Inference:** `faster-whisper` (CTranslate2) with portable CUDA support.
 - **GUI Bridge:** `pywebview` (Wraps native Edge WebView2).
-- **Frontend:** HTML5, CSS3, Modern JavaScript (ES6 Modules), Chart.js.
+- **Frontend:** HTML5, CSS3, Modern JavaScript (ES6 Modules).
+- **Charts & Visualization:** `Chart.js` with `chartjs-plugin-datalabels`.
 - **OS Integration:** `pywin32` & `ctypes` (Low-level Hooks), `mss` (Screen Capture), `keyboard` (Hotkeys).
-- **Audio:** `PyAudio` (Stream I/O), `numpy` (Real-time processing).
+- **Utilities:** `fuse.js` (Fuzzy Search), `markdown-it` (Rendering).
 
 <br>
 
@@ -163,7 +164,13 @@ To create a standalone `.exe` file:
 ## 📄 License
 
 Distributed under CC BY-NC-SA 4.0 License. See `LICENSE` for more information.
-This project bundles **FFmpeg** (LGPLv2.1) and **zlibwapi** (zlib license).
+This project bundles:
+
+- **FFmpeg** (LGPLv2.1)
+- **zlibwapi** (zlib license)
+- **Fuse.js** (Apache 2.0)
+- **Markdown-it** (MIT)
+- **Chart.js** & **chartjs-plugin-datalabels** (MIT)
 
 <br/>
 

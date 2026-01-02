@@ -48,4 +48,20 @@ This software includes external components which are governed by their own licen
    Licensed under the MIT License.
    Copyright (c) 2023 Guillaume Klein
 
+4. Markdown-it
+   Licensed under the MIT License.
+   Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin.
+   https://github.com/markdown-it/markdown-it
+
+5. Fuse.js
+   Licensed under the Apache License, Version 2.0.
+   Copyright (c) 2023 Kiro Risk.
+   https://github.com/krisk/Fuse
+
+6. Chart.js & Chart.js Plugin Datalabels
+   Licensed under the MIT License.
+   Copyright (c) 2014-2023 Chart.js Contributors.
+   https://github.com/chartjs/Chart.js
+   https://github.com/chartjs/chartjs-plugin-datalabels
+
 ==============================================================================
