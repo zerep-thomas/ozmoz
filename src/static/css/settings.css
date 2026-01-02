@@ -771,7 +771,6 @@ select:focus,
   margin-bottom: 8px;
 }
 
-/* IMPORTANT: Remove bottom margin from the last element to prevent double spacing in the card */
 .transcript-text > *:last-child {
   margin-bottom: 0 !important;
 }
@@ -942,7 +941,6 @@ select:focus,
 }
 
 /* History Sort Toggle - Graphic Fix */
-/* Uses Flexbox and specific padding to ensure perfect fit */
 .controls-container .history-sort-segmented-control {
   background-color: var(--color-input-bg);
   border-radius: 10px;
@@ -1374,7 +1372,7 @@ select:focus,
   border-color: rgba(0, 0, 0, 0.15);
 }
 
-/* Modal Confirmation Hover Effect: Darken base color (no scale, no new hue) */
+/* Modal Confirmation Hover Effect*/
 .confirm-modal .confirm-buttons .confirm-button.delete {
   transition: filter 0.2s ease, transform 0.1s ease;
 }

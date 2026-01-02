@@ -152,7 +152,10 @@ class API:
 
     def hide_window(self) -> Dict[str, Union[bool, str]]:
         """
-        Hides the main window and re-registers hotkeys to ensure focus isn't lost.
+        Hides the main window.
+
+        FIX: Removed re-registering hotkeys here.
+        Hiding the window should not destabilize keyboard hooks.
         """
         hwnd = win32gui.FindWindow(None, "Ozmoz")
         if not hwnd:
@@ -160,11 +163,6 @@ class API:
 
         if win32gui.IsWindowVisible(hwnd):
             win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
-
-        try:
-            self._hotkey_manager.register_all()
-        except Exception as error:
-            logging.error(f"Error re-registering hotkeys (hide): {error}")
 
         return {"success": True}
 
@@ -710,27 +708,29 @@ class API:
 
     def temporarily_disable_all_hotkeys(self) -> Dict[str, Union[bool, str]]:
         """
-        Temporarily unhooks all keyboard shortcuts (used when recording new hotkeys).
+        Cleanly stops the hotkey listener (e.g., pynput) to allow for
+        recording a new key combination or performing other exclusive input tasks.
         """
-        with self._app_state.keyboard_lock:
-            try:
-                import keyboard
-
-                keyboard.unhook_all()
-                time.sleep(0.1)
-                return {"success": True}
-            except Exception as error:
-                logging.error(f"Disable hotkeys error: {error}")
-                return {"success": False, "error": str(error)}
+        try:
+            self._hotkey_manager.stop_listening()
+            logging.info("Hotkeys successfully disabled.")
+            return {"success": True}
+        except Exception as error:
+            # Use a clearer log message indicating the operation failed
+            logging.error(f"Failed to temporarily disable hotkeys: {error}")
+            return {"success": False, "error": str(error)}
 
     def restore_all_hotkeys(self) -> Dict[str, Union[bool, str]]:
         """
-        Re-registers all configured hotkeys.
+        Restarts the hotkey listener by re-registering all previously defined hotkeys.
         """
         try:
             self._hotkey_manager.register_all()
+            logging.info("Hotkeys successfully restored and listener restarted.")
             return {"success": True}
         except Exception as error:
+            # Clear log message for the restoration failure
+            logging.error(f"Failed to restore and register hotkeys: {error}")
             return {"success": False, "error": str(error)}
 
     def set_hotkey(self, action_name: str, new_combination: str) -> Dict[str, Any]:

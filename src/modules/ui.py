@@ -453,26 +453,9 @@ class SystemTrayManager:
         return menu
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        """
-        Handles clicks on the tray icon.
-        Opens the menu on right-click/context, temporarily disabling keyboard hooks.
-        """
         if reason == QSystemTrayIcon.ActivationReason.Context:
-            with self.app_state.keyboard_lock:
-                try:
-                    import keyboard
-
-                    keyboard.unhook_all()
-                except Exception:
-                    pass
-
             if self.menu:
                 self.menu.exec_(QCursor.pos())
-
-            try:
-                self.hotkey_manager.register_all()
-            except Exception:
-                pass
 
     def _setup_tray_icon(self, qt_application: QApplication) -> None:
         """Configures the tray icon and connects signals."""

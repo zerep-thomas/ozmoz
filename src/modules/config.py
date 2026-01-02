@@ -14,7 +14,7 @@ os.environ["QT_LOGGING_RULES"] = "qt.qpa.window=false"
 
 
 class AppConfig:
-    VERSION: str = "1.1.1"
+    VERSION: str = "1.1.2"
     MUTEX_ID: str = "{f7c9acc6-46a7-4712-89f5-171549439308}-Ozmoz"
 
     _DEFAULT_REMOTE_URL: str = (

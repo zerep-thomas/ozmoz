@@ -67,7 +67,7 @@ A hybrid architecture chosen for high performance and low memory footprint.
 - **GUI Bridge:** `pywebview` (Wraps native Edge WebView2).
 - **Frontend:** HTML5, CSS3, Modern JavaScript (ES6 Modules).
 - **Charts & Visualization:** `Chart.js` with `chartjs-plugin-datalabels`.
-- **OS Integration:** `pywin32` & `ctypes` (Low-level Hooks), `mss` (Screen Capture), `keyboard` (Hotkeys).
+- **OS Integration:** `pywin32` & `ctypes` (Low-level Hooks), `mss` (Screen Capture), `pynput` (Robust Hotkeys).
 - **Utilities:** `fuse.js` (Fuzzy Search), `markdown-it` (Rendering).
 
 <br>
