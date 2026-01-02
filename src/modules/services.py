@@ -934,6 +934,10 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
                 self.history_manager.add_entry(
                     f"[Vision] {transcript}\n[AI] {response}"
                 )
+
+                if self.app_state.settings_window:
+                    self.app_state.settings_window.evaluate_js("refreshDashboardFull()")
+
                 self.app_state.conversation_history.append(
                     {"role": "user", "content": user_content}
                 )
@@ -1128,6 +1132,10 @@ You are Ozmoz, a direct and efficient desktop AI assistant. Today is {date_str}.
 
             if response:
                 self.history_manager.add_entry(f"[Web] {transcript}\n[AI] {response}")
+
+                if self.app_state.settings_window:
+                    self.app_state.settings_window.evaluate_js("refreshDashboardFull()")
+
                 self.app_state.conversation_history.append(
                     {"role": "user", "content": transcript}
                 )
@@ -1344,6 +1352,9 @@ class aiGenerationManager:
                 f"[Agent {agent['name']}] {instruction}\n[AI] {response}"
             )
 
+            if self.app_state.settings_window:
+                self.app_state.settings_window.evaluate_js("refreshDashboardFull()")
+
         return response
 
     def build_agent_system_prompt(self, agent: Dict[str, Any]) -> str:
@@ -1443,6 +1454,9 @@ You are Ozmoz, a specialized AI agent.
             self.history_manager.add_entry(
                 f"[User] {text_input}\n[AI] {response.strip()}"
             )
+
+            if self.app_state.settings_window:
+                self.app_state.settings_window.evaluate_js("refreshDashboardFull()")
 
         return response
 

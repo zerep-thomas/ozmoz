@@ -826,7 +826,7 @@ select:focus,
 
 .transcript-actions {
   position: absolute;
-  top: var(--spacing-md);
+  top: 9px;
   right: var(--spacing-md);
   display: flex;
   opacity: 0;
@@ -2596,4 +2596,75 @@ li:has(> p) > p {
   width: 0 !important;
   height: 0 !important;
   background: transparent !important;
+}
+
+.transcript-text pre {
+  background: #282c34 !important;
+  color: #abb2bf;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 10px 0;
+  font-family: "Consolas", "Menlo", monospace;
+  font-size: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.transcript-text code {
+  font-family: "Consolas", "Menlo", monospace;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  color: #d63384;
+}
+
+.transcript-text pre code {
+  background: transparent !important;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  white-space: pre;
+}
+
+.transcript-text table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0 !important;
+  font-size: 12px;
+  background-color: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+  display: table !important;
+}
+
+.transcript-text th {
+  background-color: rgba(0, 0, 0, 0.05);
+  font-weight: 700;
+  text-align: left;
+  color: var(--color-text);
+  border-bottom: 2px solid var(--color-border);
+}
+
+.transcript-text th,
+.transcript-text td {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+}
+
+.transcript-text tr:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.transcript-text tr:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 1em 0;
+  padding: 5px 0;
+  text-align: center;
 }

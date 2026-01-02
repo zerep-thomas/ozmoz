@@ -3,9 +3,6 @@
 let allTranscripts = [];
 let fuseInstance = null;
 
-/**
- * Loads transcription history from the backend.
- */
 window.loadTranscripts = () => {
   if (!window.isApiReady()) {
     console.error("API not available for history.");
@@ -16,10 +13,7 @@ window.loadTranscripts = () => {
     .get_history()
     .then((data) => {
       allTranscripts = data || [];
-
-      // Initialize/Update Fuzzy Search Index when data loads
       window.initFuzzySearch();
-
       window.sortAndDisplayTranscripts();
     })
     .catch((err) => {
@@ -28,30 +22,21 @@ window.loadTranscripts = () => {
     });
 };
 
-/**
- * Initializes the Fuse.js fuzzy search engine using the local library.
- */
 window.initFuzzySearch = () => {
   if (typeof window.Fuse === "undefined") {
     console.error("Fuse.js library not loaded.");
     return;
   }
-
   const options = {
-    keys: ["text"], // Search in the text content
+    keys: ["text"],
     includeScore: true,
-    threshold: 0.4, // 0.0 = exact match, 1.0 = match anything. 0.4 is good for typos.
-    ignoreLocation: true, // Search anywhere in the string
+    threshold: 0.4,
+    ignoreLocation: true,
     minMatchCharLength: 2,
   };
-
   fuseInstance = new window.Fuse(allTranscripts, options);
 };
 
-/**
- * Renders the transcript list.
- * @param {Array} dataToDisplay - Filtered transcripts.
- */
 window.displayTranscripts = (dataToDisplay) => {
   const transcriptList = document.getElementById("transcript-list");
   const noTranscripts = document.getElementById("no-transcripts");
@@ -59,7 +44,6 @@ window.displayTranscripts = (dataToDisplay) => {
 
   if (!transcriptList || !noTranscripts || !emptySearch) return;
 
-  // Initialize Markdown rendering using local library
   let md = null;
   if (typeof window.markdownit !== "undefined") {
     md = window.markdownit({
@@ -67,9 +51,24 @@ window.displayTranscripts = (dataToDisplay) => {
       linkify: true,
       breaks: true,
       typographer: true,
+      highlight: function (str, lang) {
+        if (lang && window.hljs && window.hljs.getLanguage(lang)) {
+          try {
+            return (
+              '<pre class="hljs"><code>' +
+              window.hljs.highlight(str, {
+                language: lang,
+                ignoreIllegals: true,
+              }).value +
+              "</code></pre>"
+            );
+          } catch (__) {}
+        }
+        return (
+          '<pre class="hljs"><code>' + window.escapeHtml(str) + "</code></pre>"
+        );
+      },
     });
-  } else {
-    console.warn("Markdown-it library not loaded.");
   }
 
   transcriptList.innerHTML = "";
@@ -98,8 +97,6 @@ window.displayTranscripts = (dataToDisplay) => {
     li.className = "transcript-item";
     li.id = `transcript-${transcript.id}`;
     li.setAttribute("data-timestamp", transcript.timestamp);
-
-    // Animation Stagger
     li.style.animationDelay = `${index * 0.05}s`;
 
     const date = new Date(transcript.timestamp);
@@ -112,16 +109,63 @@ window.displayTranscripts = (dataToDisplay) => {
       second: "2-digit",
     });
 
-    // 1. Initial cleanup
     let rawText = (transcript.text || "").trim();
-
-    // Markdown Parsing
     let contentHtml = "";
-    if (md) {
-      // Fix Markdown spacing
-      let formattedText = rawText.replace(/(\])\s*(#)/g, "$1\n\n$2");
 
-      // Escape LaTeX
+    if (md) {
+      let formattedText = rawText;
+
+      formattedText = formattedText.replace(/^\[(User|AI)\]\s*/gim, "");
+
+      formattedText = formattedText.replace(/([^\n])\s*(```)/g, "$1\n\n$2");
+      formattedText = formattedText.replace(/(```[^\n]*)\n{3,}/g, "$1\n\n");
+      formattedText = formattedText.replace(/(```\s*)\n{2,}([^\n])/g, "$1\n$2");
+
+      let hasChanged = true;
+      let loopCount = 0;
+      while (hasChanged && loopCount < 10) {
+        hasChanged = false;
+        const newText = formattedText.replace(/(\|.*)\n{2,}(\s*\|)/g, "$1\n$2");
+        if (newText !== formattedText) {
+          formattedText = newText;
+          hasChanged = true;
+        }
+        loopCount++;
+      }
+
+      formattedText = formattedText.replace(
+        /((?:\s*\|[^\n]+\|\s*\n?)+)/g,
+        function (tableBlock) {
+          const lines = tableBlock
+            .trim()
+            .split("\n")
+            .filter((l) => l.trim());
+
+          if (lines.length < 2) return tableBlock;
+
+          const secondLine = lines[1].trim();
+          const isSeparator = /^\|[\s\-:|]+\|$/.test(secondLine);
+
+          if (isSeparator) return tableBlock;
+
+          const firstLine = lines[0];
+          const pipeCount = (firstLine.match(/\|/g) || []).length;
+          const colCount = Math.max(1, pipeCount - 1);
+          const separator = "|" + " --- |".repeat(colCount);
+
+          const newLines = [lines[0], separator, ...lines.slice(1)];
+          return "\n" + newLines.join("\n") + "\n";
+        }
+      );
+
+      formattedText = formattedText.replace(/([^\n\|])\n(\|)/g, "$1\n\n$2");
+      formattedText = formattedText.replace(
+        /(\|[^\n]+)\n([^\|\n])/g,
+        "$1\n\n$2"
+      );
+
+      formattedText = formattedText.replace(/\n{3,}/g, "\n\n");
+
       const protectedText = formattedText
         .replace(/\\\(/g, "\\\\(")
         .replace(/\\\)/g, "\\\\)")
@@ -130,18 +174,16 @@ window.displayTranscripts = (dataToDisplay) => {
 
       contentHtml = md.render(protectedText);
 
-      // 2. HTML Cleanup (Remove empty blocks at end)
-      contentHtml = contentHtml.replace(
-        /(<p>\s*<\/p>\s*|<br\s*\/?>\s*|\n)+$/gi,
-        ""
-      );
+      contentHtml = contentHtml.replace(/(<p>\s*<\/p>|<br\s*\/?>|\n)+$/gi, "");
+
+      contentHtml = contentHtml.replace(/(<br\s*\/?>\s*){3,}/gi, "<br><br>");
     } else {
       contentHtml = window.escapeHtml(rawText).replace(/\n/g, "<br>");
     }
 
     li.innerHTML = `
+        <div class="transcript-header">
             <div class="transcript-time">${time}</div>
-            <div class="transcript-text">${contentHtml}</div>
             <div class="transcript-actions">
                 <button class="button copy-btn" type="button" aria-label="${window.t(
                   "btn_copy"
@@ -150,7 +192,11 @@ window.displayTranscripts = (dataToDisplay) => {
                     <span class="copy-btn-text">${window.t("btn_copy")}</span>
                 </button>
             </div>
-        `;
+        </div>
+        <div class="transcript-content-wrapper">
+            <div class="transcript-text">${contentHtml}</div>
+        </div>
+    `;
 
     if (window.renderMathInElement) {
       setTimeout(() => {
@@ -182,17 +228,12 @@ window.displayTranscripts = (dataToDisplay) => {
   });
 };
 
-/**
- * Copies transcript text to clipboard.
- */
 window.copyTranscriptText = (textToCopy, buttonElement) => {
   const textSpan = buttonElement.querySelector(".copy-btn-text");
-
   if (!window.isApiReady()) {
     window.showToast(window.t("toast_error"), "error");
     return;
   }
-
   window.pywebview.api
     .copy_text(textToCopy)
     .then(() => {
@@ -219,43 +260,30 @@ window.sortAndDisplayTranscripts = () => {
     const timeB = new Date(b.timestamp || 0).getTime();
     return sortOrder === "newest" ? timeB - timeA : timeA - timeB;
   });
-
-  // Re-initialize Fuse with sorted data if needed, or just let filter handle it
   if (fuseInstance) {
     fuseInstance.setCollection(sorted);
   }
-
-  // Keep the sorted reference for fallback
   allTranscripts = sorted;
   window.filterTranscripts();
 };
 
-/**
- * Intelligent Filter using Fuse.js if available, falling back to simple includes.
- */
 window.filterTranscripts = () => {
   const searchInput = document.getElementById("search-transcript");
   if (!searchInput) return;
   const searchText = searchInput.value.trim();
-
   let filtered = [];
-
   if (!searchText) {
-    // If no search, show all (which are already sorted)
     filtered = allTranscripts;
   } else if (fuseInstance) {
     const results = fuseInstance.search(searchText);
-    // Fuse returns { item, score, ... }, we just need the item
     filtered = results.map((result) => result.item);
   } else {
-    // Fallback: Basic string matching
     const lowerSearch = searchText.toLowerCase();
     filtered = allTranscripts.filter(
       (item) =>
         item && item.text && item.text.toLowerCase().includes(lowerSearch)
     );
   }
-
   window.displayTranscripts(filtered);
 };
 
@@ -282,7 +310,6 @@ window.confirmClearHistory = () => {
   });
 };
 
-// Add listener to the search input to trigger intelligent filtering
 document.addEventListener("DOMContentLoaded", () => {
   const searchInput = document.getElementById("search-transcript");
   if (searchInput) {
