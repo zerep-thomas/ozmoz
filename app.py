@@ -1,39 +1,28 @@
+"""
+Ozmoz Application Entry Point.
+"""
+
 import logging
+import os
+import sys
+import threading
 import time
+from pathlib import Path
+from typing import Dict, Optional
 
-# --- Performance Logging Setup ---
-START_TIME = time.perf_counter()
+# --- Path Setup (Must be before local imports) ---
+# Necessary to resolve local modules when running from source or frozen state
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+SRC_PATH = os.path.join(CURRENT_DIR, "src")
+sys.path.insert(0, SRC_PATH)
 
-
-def log_perf(step_name):
-    """Logs the time elapsed since the script started."""
-    elapsed = time.perf_counter() - START_TIME
-    logging.info(f"[PERF] {elapsed:.4f}s - {step_name}")
-
-
-log_perf("Script start")
-
-import os  # noqa: E402
-import sys  # noqa: E402
-import threading  # noqa: E402
-from pathlib import Path  # noqa: E402
-from typing import Dict, Optional  # noqa: E402
-
-log_perf("Native imports finished")
-
+# --- Third-party imports ---
 import webview  # noqa: E402
 import win32api  # noqa: E402
 import win32event  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
-log_perf("Heavy third-party imports finished (webview, win32)")
-
-# --- Path Setup ---
-current_dir: str = os.path.dirname(os.path.abspath(__file__))
-src_path: str = os.path.join(current_dir, "src")
-sys.path.insert(0, src_path)
-
-# --- Local Modules ---
+# --- Local Modules (noqa: E402 to suppress linter warning due to sys.path hack) ---
 from modules.api import API  # noqa: E402
 from modules.audio import (  # noqa: E402
     AudioManager,
@@ -52,11 +41,11 @@ from modules.data import (  # noqa: E402
 )
 from modules.os_adapter import WindowsAdapter  # noqa: E402
 from modules.services import (  # noqa: E402
+    AiGenerationManager,
     ContextManager,
     GenerationController,
     VisionManager,
     WebSearchManager,
-    aiGenerationManager,
 )
 from modules.system import (  # noqa: E402
     AppLifecycleManager,
@@ -72,8 +61,6 @@ from modules.utils import (  # noqa: E402
     ScreenManager,
     SoundManager,
 )
-
-log_perf("Local module imports finished")
 
 # --- Environment Configuration ---
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
@@ -91,12 +78,11 @@ class OzmozApp:
         Initialize the application components, managers, and services.
         Sets up the dependency injection graph.
         """
-        log_perf("OzmozApp.__init__ start")
-
         # 1. Logging setup
         setup_logging()
+        logging.info(f"Ozmoz v{AppConfig.VERSION} - Initializing application...")
 
-        # 2. Path definitions
+        # 2. Core Infrastructure
         self.paths: Dict[str, Path] = {
             "settings": PathManager.get_user_data_path("data/settings.json"),
             "history": PathManager.get_user_data_path("data/history.json"),
@@ -105,13 +91,8 @@ class OzmozApp:
             "agents": PathManager.get_user_data_path("data/agents.json"),
         }
 
-        logging.info(f"Ozmoz v{AppConfig.VERSION} - Initializing application...")
-
-        # --- Core Infrastructure ---
         self.event_bus = EventBus()
         self.os_adapter = WindowsAdapter()
-
-        log_perf("Core Infrastructure initialized")
 
         # 3. Data & Utilities Initialization
         self.credential_manager = CredentialManager()
@@ -138,18 +119,13 @@ class OzmozApp:
 
         self.ui_resource_loader = UIResourceLoader(app_state)
 
-        log_perf("Data Managers initialized")
-
-        # Inject OS Interface into Managers
+        # 4. OS Interface Injection
         self.window_manager = WindowManager(app_state, self.os_adapter)
-
         self.audio_manager = AudioManager(
             app_state, self.sound_manager, self.os_adapter
         )
 
-        log_perf("Audio & Window Managers initialized")
-
-        # 4. Audio & Transcription Services
+        # 5. Transcription Services
         self.transcription_service = TranscriptionService(
             app_state=app_state,
             replacement_manager=self.replacement_manager,
@@ -166,14 +142,12 @@ class OzmozApp:
             event_bus=self.event_bus,
         )
 
-        log_perf("Transcription Services initialized")
-
+        # 6. Logic & Controllers
         self.context_manager = ContextManager(app_state=app_state)
         self.agent_manager = AgentManager(
             agents_file=self.paths["agents"], config_manager=self.config_manager
         )
 
-        # 5. Controllers & Intelligence Logic
         self.generation_controller = GenerationController(
             app_state=app_state,
             window=None,
@@ -181,8 +155,8 @@ class OzmozApp:
             sound_manager=self.sound_manager,
             transcription_manager=self.transcription_manager,
             stats_manager=self.stats_manager,
-            system_health_manager=None,
-            hotkey_manager=None,
+            system_health_manager=None,  # Injected later
+            hotkey_manager=None,  # Injected later
             config_manager=self.config_manager,
             credential_manager=self.credential_manager,
         )
@@ -208,7 +182,7 @@ class OzmozApp:
             generation_controller=self.generation_controller,
         )
 
-        self.ai_generation_manager = aiGenerationManager(
+        self.ai_generation_manager = AiGenerationManager(
             app_state=app_state,
             config_manager=self.config_manager,
             context_manager=self.context_manager,
@@ -222,9 +196,7 @@ class OzmozApp:
             generation_controller=self.generation_controller,
         )
 
-        log_perf("AI Controllers initialized")
-
-        # 6. System & Hotkeys
+        # 7. System & Hotkeys
         self.hotkey_manager = HotkeyManager(
             app_state=app_state,
             window_manager=self.window_manager,
@@ -245,7 +217,7 @@ class OzmozApp:
             window_manager=self.window_manager,
         )
 
-        # Final injection for circular dependencies
+        # Circular dependency resolution
         self.generation_controller.system_health_manager = self.system_health_manager
         self.generation_controller.hotkey_manager = self.hotkey_manager
 
@@ -260,7 +232,7 @@ class OzmozApp:
             on_resume_callback=self.hotkey_manager.system_resume_handler
         )
 
-        # 7. API & System Tray
+        # 8. API & UI Integration
         self.api = API(
             app_state=app_state,
             config_manager=self.config_manager,
@@ -284,28 +256,23 @@ class OzmozApp:
             self.api.request_exit,
         )
 
-        log_perf("System & Hotkeys initialized")
-
         self.mutex_handle: Optional[int] = None
 
-        log_perf("OzmozApp.__init__ end")
-
     def _startup_sequence(self) -> None:
-        """
-        Execute background tasks after UI initialization.
-        Warms up services and opens settings if configured.
-        """
-        log_perf("Background: Initializing Audio & Sound...")
+        """Background initialization tasks to prevent UI blocking."""
+        logging.info("Running background startup sequence...")
         self.audio_manager.initialize()
         self.sound_manager._initialize()
         self.lifecycle_manager.run_background_startup_tasks()
         self.audio_manager.warmup()
         self.transcription_service.warmup()
         self.generation_controller.warmup()
-        time.sleep(2.5)
+
+        # Artificial delay to ensure UI is ready before showing settings if needed
+        time.sleep(1.5)
 
         if app_state.settings_window:
-            logging.info("Opening settings window.")
+            logging.info("Opening settings window on startup.")
             app_state.settings_window.show()
             try:
                 self.window_manager.bring_to_foreground("Ozmoz Settings")
@@ -313,25 +280,16 @@ class OzmozApp:
                 pass
 
     def run(self) -> None:
-        """
-        Main execution entry point:
-        - Single instance check
-        - UI & Config loading
-        - Window creation
-        - Thread starting
-        - Webview loop start
-        """
-        log_perf("OzmozApp.run start")
-
+        """Main application entry point."""
         try:
             self.mutex_handle = self.os_adapter.create_single_instance_mutex(
                 AppConfig.MUTEX_ID
             )
         except RuntimeError:
-            logging.warning("Application already running. Exiting.")
+            logging.warning("Application is already running. Exiting.")
             sys.exit(0)
 
-        logging.info(f"Ozmoz v{AppConfig.VERSION} starting...")
+        logging.info(f"Starting Ozmoz v{AppConfig.VERSION}")
         load_dotenv()
 
         try:
@@ -341,8 +299,7 @@ class OzmozApp:
             self.system_tray_manager.run_in_thread()
             time.sleep(0.2)
 
-            log_perf("System Tray started")
-
+            # Create Main Window (Hidden overlay)
             main_window = webview.create_window(
                 "Ozmoz",
                 html=self.ui_resource_loader.create_html("src/templates/index.html"),
@@ -361,8 +318,7 @@ class OzmozApp:
             app_state.window = main_window
             self.generation_controller.window = main_window
 
-            log_perf("Main Window created")
-
+            # Create Settings Window
             settings_window = webview.create_window(
                 "Ozmoz Settings",
                 html=self.ui_resource_loader.create_html("src/templates/settings.html"),
@@ -388,10 +344,8 @@ class OzmozApp:
             settings_window.events.closing += on_settings_closing
             app_state.settings_window = settings_window
 
-            log_perf("Settings Window created")
-
+            # Start background services
             threading.Thread(target=self._startup_sequence, daemon=True).start()
-
             self.power_monitor.start()
             self.hotkey_manager.register_all()
 
@@ -401,11 +355,7 @@ class OzmozApp:
                 daemon=True,
             ).start()
 
-            log_perf("Background threads started")
-
-            logging.info("System ready. Starting UI loop.")
-
-            log_perf("Starting Webview loop (Blocking)")
+            logging.info("System ready. Starting Webview loop.")
             webview.start(debug=False)
 
         except Exception as e:
@@ -425,10 +375,6 @@ class OzmozApp:
             logging.info("Bye.")
 
 
-def main() -> None:
+if __name__ == "__main__":
     app = OzmozApp()
     app.run()
-
-
-if __name__ == "__main__":
-    main()

@@ -7,12 +7,10 @@ import threading
 import webbrowser
 from typing import Any, Callable, Dict, List, Match, Optional, cast
 
-# Qt Framework
 from PySide6.QtCore import QEvent, QTimer
 from PySide6.QtGui import QCursor, QEnterEvent, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-# Local Modules
 from modules.config import AppState, app_state
 from modules.utils import PathManager
 
@@ -20,7 +18,7 @@ from modules.utils import PathManager
 class UIResourceLoader:
     """
     Manages loading, localization, and dynamic injection into HTML templates.
-    Handles reading files, bundling JS/CSS, and embedding fonts/images.
+    Handles reading files and runtime bundling of JS/CSS.
     """
 
     def __init__(self, app_state_instance: AppState) -> None:
@@ -46,12 +44,6 @@ class UIResourceLoader:
     def _read_resource(self, relative_path: str) -> str:
         """
         Reads a text resource file safely from the disk.
-
-        Args:
-            relative_path (str): Path relative to the application root.
-
-        Returns:
-            str: The content of the file or an empty string if failed.
         """
         try:
             full_path: str = PathManager.get_resource_path(relative_path)
@@ -67,20 +59,19 @@ class UIResourceLoader:
 
     def _load_and_bundle_es6(self, file_list: List[str]) -> str:
         """
-        Reads multiple ES6 files, removes 'import'/'export' keywords,
-        and concatenates them to emulate a bundler.
+        Runtime Bundler: Reads multiple ES6 files, strips 'import'/'export' statements,
+        and concatenates them to run in the WebView without a build step.
 
-        Args:
-            file_list (List[str]): List of relative file paths to bundle.
-
-        Returns:
-            str: The concatenated JavaScript content.
+        Note: This is a simplified approach for this specific architecture.
+        In a larger project, a proper build chain (Webpack/Vite) would be preferred.
         """
         bundled_content: List[str] = []
         for file_path in file_list:
             content: str = self._read_resource(file_path)
+            if not content:
+                continue
 
-            # Remove ES6 module syntax for browser compatibility without a build step
+            # Remove ES6 module syntax for browser compatibility
             content = re.sub(r"^\s*import .*?;", "", content, flags=re.MULTILINE)
             content = re.sub(r"^\s*export\s+", "", content, flags=re.MULTILINE)
 
@@ -93,13 +84,10 @@ class UIResourceLoader:
     def _generate_fonts_css(self) -> str:
         """
         Generates CSS @font-face rules by embedding font files as base64 strings.
-
-        Returns:
-            str: CSS string containing the font definitions.
+        This ensures fonts work even if local file access is restricted in the WebView.
         """
         css_parts: List[str] = []
         font_family: str = "OpenSauceSans"
-        logging.info("Generating fonts CSS from base64...")
 
         for font_entry in self.font_config:
             try:
@@ -114,17 +102,15 @@ class UIResourceLoader:
                             "utf-8"
                         )
 
-                    file_extension: str = (
+                    ext: str = (
                         os.path.splitext(font_entry["file"])[1].lower().replace(".", "")
                     )
-                    font_format: str = (
-                        "truetype" if file_extension == "ttf" else file_extension
-                    )
+                    fmt: str = "truetype" if ext == "ttf" else ext
 
                     css_rule: str = f"""
                     @font-face {{
                         font-family: '{font_family}';
-                        src: url(data:font/{font_format};charset=utf-8;base64,{base64_data}) format('{font_format}');
+                        src: url(data:font/{fmt};charset=utf-8;base64,{base64_data}) format('{fmt}');
                         font-weight: {font_entry["weight"]};
                         font-style: normal;
                         font-display: swap;
@@ -141,7 +127,6 @@ class UIResourceLoader:
     def load_html_content(self) -> None:
         """
         Preloads HTML, CSS, JS, and Fonts into memory.
-        This ensures resources are ready before the UI is shown.
         """
         try:
             self.resources["fonts_css"] = self._generate_fonts_css()
@@ -184,8 +169,6 @@ class UIResourceLoader:
                 "src/static/js/settings/main.js",
             ]
 
-            # --- Vendor Libraries Loading ---
-            # Order matters: Dependencies first
             vendor_files = [
                 "src/static/js/vendor/chart.min.js",
                 "src/static/js/vendor/markdown-it.min.js",
@@ -201,14 +184,11 @@ class UIResourceLoader:
                     logging.warning(f"Failed to load vendor library: {v_file}")
 
             combined_vendor = "\n".join(vendor_content)
-
-            # --- Application Logic Loading ---
             settings_logic: str = self._load_and_bundle_es6(settings_modules)
 
-            # Combine Vendor libs + App logic
             self.resources["settings_js"] = f"{combined_vendor}\n{settings_logic}"
 
-            logging.debug("All UI resources (HTML/CSS/JS/Fonts) loaded.")
+            logging.debug("All UI resources loaded.")
 
         except Exception as error:
             logging.critical(
@@ -218,12 +198,6 @@ class UIResourceLoader:
     def create_html(self, file_name: str) -> str:
         """
         Prepares final HTML by injecting Fonts, CSS, JS, and encoding images to Base64.
-
-        Args:
-            file_name (str): The name or path of the target template file.
-
-        Returns:
-            str: The fully processed HTML string.
         """
         target_path: str = file_name
         content: str = ""
@@ -238,7 +212,6 @@ class UIResourceLoader:
             return f"<html><body><h1>Error</h1><p>{error_message}</p></body></html>"
 
         def replace_img_b64(match: Match) -> str:
-            """Callback to replace relative image paths with base64 data."""
             relative_path: str = match.group(1)
             real_path: str = PathManager.get_resource_path(
                 os.path.join("src", "static", relative_path)
@@ -274,7 +247,6 @@ class UIResourceLoader:
             js_content = self.resources["settings_js"]
 
             try:
-                # Map HTML IDs to AppState booleans for checkbox pre-checking
                 toggles_map: Dict[str, bool] = {
                     "toggle-sound": app_state.sound_enabled,
                     "toggle-mute": app_state.mute_sound,
@@ -304,12 +276,10 @@ class UIResourceLoader:
             css_content = fonts_style + "\n" + self.resources["index_css"]
             js_content = self.resources["index_js"]
 
-        # Inject CSS
         if css_content:
             style_tag: str = f"<style>\n{css_content}\n</style>\n</head>"
             content = content.replace("</head>", style_tag)
 
-        # Inject JS
         if js_content:
             script_tag: str = f"<script>\n{js_content}\n</script>\n</body>"
             content = content.replace("</body>", script_tag)
@@ -329,14 +299,9 @@ class WindowManager:
         self.settings_window_title: str = "Ozmoz Settings"
 
     def _get_window_handle(self, title: str) -> Optional[int]:
-        """Finds the window handle (HWND on Windows) by title."""
         return self.os_interface.find_window_handle(title)
 
     def toggle_main_window_visibility(self) -> None:
-        """
-        Toggles the main window's visibility state.
-        Does nothing if recording is in progress.
-        """
         if app_state.is_recording or app_state.ai_recording:
             return
 
@@ -350,15 +315,6 @@ class WindowManager:
                 )
 
     def bring_to_foreground(self, title: str) -> bool:
-        """
-        Attempts to bring the window with the specified title to the foreground.
-
-        Args:
-            title (str): The window title to search for.
-
-        Returns:
-            bool: True if successful, False otherwise.
-        """
         window_handle: Optional[int] = self._get_window_handle(title)
         if not window_handle:
             return False
@@ -371,7 +327,6 @@ class WindowManager:
             return False
 
     def is_visible(self) -> bool:
-        """Checks if the main application window is currently visible."""
         window_handle: Optional[int] = self._get_window_handle(self.main_window_title)
         return (
             self.os_interface.is_window_visible(window_handle)
@@ -380,22 +335,13 @@ class WindowManager:
         )
 
     def move_main_window(self, x: int, y: int) -> None:
-        """
-        Moves the main application window to the specified coordinates.
-        """
         handle = self._get_window_handle(self.main_window_title)
         if handle:
             self.os_interface.move_window(handle, x, y)
 
 
 class SystemTrayManager:
-    """
-    Manages the taskbar icon (System Tray) and its context menu.
-    """
-
     class _AutoCloseMenu(QMenu):
-        """Custom QMenu that automatically closes after a delay if inactive."""
-
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, **kwargs)
             self.close_timer: QTimer = QTimer(self)
@@ -403,12 +349,10 @@ class SystemTrayManager:
             self.close_timer.timeout.connect(self.close)
 
         def enterEvent(self, event: QEnterEvent) -> None:
-            """Stop close timer when mouse enters the menu."""
             self.close_timer.stop()
             super().enterEvent(event)
 
         def leaveEvent(self, event: QEvent) -> None:
-            """Start close timer when mouse leaves the menu."""
             self.close_timer.start(800)
             super().leaveEvent(event)
 
@@ -427,14 +371,12 @@ class SystemTrayManager:
         self.menu: Optional[QMenu] = None
 
     def _show_about(self) -> None:
-        """Opens the About page in the default web browser."""
         try:
             webbrowser.open("https://github.com/zerep-thomas/ozmoz")
         except Exception:
             pass
 
     def _create_menu(self) -> QMenu:
-        """Creates and styles the context menu for the system tray."""
         menu = self._AutoCloseMenu()
         menu.setStyleSheet(
             """
@@ -458,7 +400,6 @@ class SystemTrayManager:
                 self.menu.exec_(QCursor.pos())
 
     def _setup_tray_icon(self, qt_application: QApplication) -> None:
-        """Configures the tray icon and connects signals."""
         self.menu = self._create_menu()
         icon_path: str = PathManager.get_resource_path("src/static/img/icons/icon.ico")
         self.tray_icon = QSystemTrayIcon(QIcon(icon_path), qt_application)
@@ -468,13 +409,8 @@ class SystemTrayManager:
         self.app_state.tray_icon_qt = self.tray_icon
 
     def run_in_thread(self) -> None:
-        """
-        Runs the Qt event loop in a separate daemon thread to avoid blocking the main app.
-        """
-
         def run_pyqt_app() -> None:
             try:
-                # Ensure only one QApplication exists
                 app = cast(
                     QApplication, QApplication.instance() or QApplication(sys.argv)
                 )
