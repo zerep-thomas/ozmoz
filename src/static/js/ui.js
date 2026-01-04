@@ -265,7 +265,7 @@ function finalizeStreamedContent() {
 
     // Re-use MD configuration (could be extracted to a helper function)
     const md = window.markdownit({
-      html: true,
+      html: false,
       linkify: true,
       highlight: (str, lang) => {
         if (lang && window.hljs?.getLanguage(lang)) {

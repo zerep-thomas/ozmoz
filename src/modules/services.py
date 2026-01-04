@@ -719,7 +719,7 @@ class GenerationController:
 
 
 class VisionManager:
-    """Manages screen capture, OCR extraction, and analysis via multimodal models."""
+    """Manages screen capture and preparation for multimodal models."""
 
     def __init__(
         self,
@@ -763,39 +763,12 @@ class VisionManager:
 
         return self.app_state.model
 
-    def extract_text_from_image(self, file_path: str) -> str:
-        """
-        Sends the image to an external OCR API to extract text.
-        """
-        logging.info(f"OCR on: {file_path}")
-        try:
-            with open(file_path, "rb") as file_handle:
-                response = requests.post(
-                    "https://api.ocr.space/parse/image",
-                    files={"image": ("screenshot.png", file_handle.read())},
-                    data={
-                        "apikey": self.credential_manager.get_api_key("ocr"),
-                        "language": "auto",
-                        "isOverlayRequired": False,
-                        "OCREngine": "2",
-                    },
-                )
-
-            if response.status_code == 200 and response.json().get("ParsedResults"):
-                return response.json()["ParsedResults"][0].get("ParsedText", "").strip()
-            return ""
-        except Exception as e:
-            logging.error(f"OCR Error: {e}")
-            return ""
-
     def process_vision_capture(
         self, model: str
     ) -> Tuple[Optional[str], Optional[str], str]:
         """
-        Captures the screen and prepares the data (Base64 or OCR Text) based on the model type.
-
-        Returns:
-            Tuple: (File Path, Base64 String, OCR Text)
+        Captures the screen and prepares the data (Base64).
+        SECURITY: OCR fallback via third-party API has been removed to prevent data leakage.
         """
         file_path = self.screen_manager.capture()
         base64_image = None
@@ -805,7 +778,10 @@ class VisionManager:
             if self.config_manager.check_if_model_is_multimodal(model):
                 base64_image = self.screen_manager.convert_image_to_base64(file_path)
             else:
-                extracted_text = self.extract_text_from_image(file_path)
+                logging.warning(
+                    "Vision attempted with non-multimodal model. Capture ignored to prevent data leak."
+                )
+
         return file_path, base64_image, extracted_text
 
     def build_vision_system_prompt(self, ocr_text: Optional[str] = None) -> str:
@@ -819,8 +795,6 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
 - If the user asks to describe the screen, provide a detailed description.
 - Respond in Markdown.
 """
-        if ocr_text:
-            prompt += f"\n# CONTEXT (OCR)\n{ocr_text}"
         return prompt
 
     def generate_screen_vision_text(self) -> None:
@@ -835,8 +809,14 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
             m for m in self.app_state.screen_vision_model_list if m in available_models
         ]
 
-        if not compatible_models:
-            message = "No vision model available. Please add a compatible API key (e.g., Groq)."
+        # Check if current selected model is multimodal fallback
+        if (
+            not compatible_models
+            and not self.config_manager.check_if_model_is_multimodal(
+                self.app_state.model
+            )
+        ):
+            message = "No vision-capable model available. Please select a multimodal model (e.g. Llama 3.2 Vision)."
             logging.warning(message)
             if self.generation_controller.window:
                 self.generation_controller.window.evaluate_js(
@@ -889,7 +869,6 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
 
             self.generation_controller.show_loading_ui()
 
-            # Using shared Transcription Service
             logging.debug(
                 "Sending audio to shared Transcription Service (Auto-optimized)..."
             )
@@ -907,12 +886,16 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
             self.stats_manager.update_stats(transcript, duration, is_generation=True)
 
             model = self.select_best_vision_model()
-            screen_path, base64_img, ocr_text = self.process_vision_capture(model)
+            screen_path, base64_img, _ = self.process_vision_capture(model)
+
+            if not base64_img:
+                # Abort if no image generated (e.g. non-multimodal model selected)
+                raise ValueError("Selected model cannot process images.")
 
             if not self.app_state.is_ai_response_visible:
                 self.app_state.conversation_history.clear()
 
-            system_prompt = self.build_vision_system_prompt(ocr_text)
+            system_prompt = self.build_vision_system_prompt()
             messages: List[Dict[str, Any]] = [
                 {"role": "system", "content": system_prompt}
             ]
@@ -949,7 +932,7 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
             logging.error(f"Vision Crash: {e}", exc_info=True)
             try:
                 self.generation_controller.window.evaluate_js(
-                    "displayError('Unexpected error.')"
+                    "displayError('Unexpected error or incompatible model.')"
                 )
             except Exception:
                 pass
@@ -1243,7 +1226,9 @@ class aiGenerationManager:
                         self.screen_manager.convert_image_to_base64(path)
                     )
                 else:
-                    context["image_text"] = self.extract_text_from_image(path)
+                    logging.warning(
+                        f"Agent {agent.get('name')} requested vision with non-multimodal model."
+                    )
 
                 self.generation_controller.safe_remove_file(path)
         return context

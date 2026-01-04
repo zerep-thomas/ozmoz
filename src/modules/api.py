@@ -791,12 +791,35 @@ class API:
     def _update_worker(self, url: str) -> None:
         """
         Background worker to download the update and launch the installer.
+        SECURITY: Enforces strict URL validation to prevent malicious downloads.
         """
         try:
-            temp_dir = tempfile.gettempdir()
-            file_path = os.path.join(temp_dir, url.split("/")[-1])
+            # SECURITY: URL Validation
+            from urllib.parse import urlparse
 
-            with requests.get(url, stream=True) as response:
+            parsed_url = urlparse(url)
+
+            # Whitelist allowed domains for updates
+            ALLOWED_DOMAINS = ["github.com", "objects.githubusercontent.com"]
+            if parsed_url.hostname not in ALLOWED_DOMAINS:
+                raise ValueError(
+                    "Security Violation: Update URL domain not whitelisted."
+                )
+
+            if parsed_url.scheme != "https":
+                raise ValueError("Security Violation: Update must use HTTPS.")
+
+            temp_dir = tempfile.gettempdir()
+            file_name = url.split("/")[-1]
+            # Ensure filename ends with .exe for safety
+            if not file_name.lower().endswith(".exe"):
+                file_name += ".exe"
+
+            file_path = os.path.join(temp_dir, file_name)
+
+            logging.info(f"Starting secure update download from: {url}")
+
+            with requests.get(url, stream=True, timeout=60) as response:
                 response.raise_for_status()
                 total_size = int(response.headers.get("content-length", 0))
                 downloaded_size = 0
@@ -817,6 +840,7 @@ class API:
             self.request_exit()
 
         except Exception as error:
+            logging.error(f"Update failed: {error}")
             if self._app_state.settings_window:
                 msg = str(error).replace('"', "'").replace("\n", " ")
                 self._app_state.settings_window.evaluate_js(

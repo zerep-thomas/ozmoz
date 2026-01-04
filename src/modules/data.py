@@ -31,7 +31,7 @@ class CredentialManager:
     """
 
     SERVICE_NAME: str = "OzmozApp"
-    KNOWN_KEYS: List[str] = ["groq_audio", "deepgram", "groq_ai", "cerebras", "ocr"]
+    KNOWN_KEYS: List[str] = ["groq_audio", "deepgram", "groq_ai", "cerebras"]
 
     def __init__(self) -> None:
         """Initialize the manager and load existing keys into memory cache."""
