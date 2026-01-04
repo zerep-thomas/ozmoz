@@ -2068,7 +2068,7 @@ select:focus,
   width: 140px;
   height: 30px;
   background: var(--color-input-bg);
-  border-radius: 26px;
+  border-radius: 8px;
   overflow: hidden;
   position: relative;
   transition: var(--transition-default);
@@ -2110,7 +2110,7 @@ select:focus,
   height: calc(100% - 4px);
   background: var(--color-card-bg);
   color: var(--color-text);
-  border-radius: 26px;
+  border-radius: 6px;
   position: absolute;
   left: 2px;
   top: 2px;
