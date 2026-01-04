@@ -155,7 +155,7 @@ class CredentialManager:
 
 
 class UpdateManager:
-    """Manages version checking and remote configuration updates."""
+    """Manages version checking via GitHub API."""
 
     @staticmethod
     def _compare_versions(version1: str, version2: str) -> int:
@@ -186,28 +186,42 @@ class UpdateManager:
         return 0
 
     def fetch_remote_version_info(self) -> None:
-        """Fetches the latest version info from the remote server if not already cached."""
+        """Fetches the latest version info from GitHub Releases."""
         if app_state.remote_version is not None:
             return
 
         try:
-            logging.info(f"Checking remote version: {AppConfig.REMOTE_CONFIG_URL}")
+            logging.info(
+                f"Checking updates via GitHub: {AppConfig.GITHUB_RELEASES_URL}"
+            )
             response = requests.get(
-                AppConfig.REMOTE_CONFIG_URL,
-                headers={"Content-Type": "application/json"},
-                timeout=10,
+                AppConfig.GITHUB_RELEASES_URL,
+                headers={"Accept": "application/vnd.github+json"},
+                timeout=5,
             )
             response.raise_for_status()
 
             data = response.json()
-            if isinstance(data, list) and data:
-                # Find the object containing version info
-                info = next((item for item in data if "version" in item), None)
-                if info:
-                    app_state.remote_version = info.get("version")
-                    app_state.remote_update_url = info.get("update_url")
+            # GitHub returns "tag_name": "v1.1.2". We strip the 'v'.
+            latest_version = data.get("tag_name", "").lstrip("v")
+
+            # Find the executable download URL in assets
+            update_url = None
+            for asset in data.get("assets", []):
+                if asset.get("name", "").endswith(".exe"):
+                    update_url = asset.get("browser_download_url")
+                    break
+
+            # Fallback: link to release page if no exe found
+            if not update_url:
+                update_url = data.get("html_url")
+
+            if latest_version:
+                app_state.remote_version = latest_version
+                app_state.remote_update_url = update_url
+
         except Exception as error:
-            logging.error(f"Error checking remote version: {error}")
+            logging.error(f"Error checking GitHub version: {error}")
 
     def check_for_updates(self) -> Tuple[bool, Optional[str], Optional[str]]:
         """
@@ -228,7 +242,7 @@ class UpdateManager:
 class ConfigManager:
     """
     Manages application settings (loading/saving JSON) and
-    retrieves available AI models from configuration.
+    retrieves available AI models from LOCAL configuration.
     """
 
     MODEL_LIST_KEYS: Dict[str, str] = {
@@ -246,24 +260,35 @@ class ConfigManager:
         self.credential_manager = manager
 
     def load_and_parse_remote_config(self) -> None:
-        """Downloads and parses the remote configuration file for models."""
+        """Loads configuration from the local JSON file instead of remote."""
         if app_state.cached_remote_config:
             return
 
         try:
-            response = requests.get(AppConfig.REMOTE_CONFIG_URL, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            app_state.cached_remote_config = data
+            # Path to local models.json (same directory as this file)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(current_dir, "models.json")
 
-            # Map JSON lists to AppState attributes
-            for item in data:
-                for json_key, app_attr in self.MODEL_LIST_KEYS.items():
-                    if json_key in item:
-                        setattr(app_state, app_attr, item[json_key])
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+
+                app_state.cached_remote_config = data
+
+                # Map JSON lists to AppState attributes
+                for item in data:
+                    for json_key, app_attr in self.MODEL_LIST_KEYS.items():
+                        if json_key in item:
+                            setattr(app_state, app_attr, item[json_key])
+
+                logging.info("Local models configuration loaded successfully.")
+            else:
+                logging.error(f"Configuration file not found: {config_path}")
+                # Use empty fallback
+                app_state.cached_remote_config = []
 
         except Exception as error:
-            logging.error(f"Remote config error: {error}")
+            logging.error(f"Local config loading error: {error}")
             # Reset lists on error
             for app_attr in self.MODEL_LIST_KEYS.values():
                 setattr(app_state, app_attr, [])

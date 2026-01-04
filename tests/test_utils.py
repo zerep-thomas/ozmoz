@@ -3,8 +3,8 @@ Ozmoz System Diagnostics & Health Check Suite
 =============================================
 
 This module serves as the primary integration and unit testing suite for the Ozmoz Application.
-It validates external connectivity, API latency, internal logic integrity,
-as well as data persistence robustness and update mechanisms.
+It validates external connectivity (GitHub, AI Providers), API latency, internal logic integrity,
+local configuration validity, as well as data persistence robustness.
 
 Usage:
     python tests/test_utils.py
@@ -78,14 +78,14 @@ logger.addHandler(handler)
 # --- TEST SUITE --------------------------------------------------------------
 
 
-class TestRemoteConfiguration(unittest.TestCase):
+class TestLocalModelConfiguration(unittest.TestCase):
     """
-    Integration Tests: Validates the integrity and accessibility of the
-    remote configuration service (JSONSilo).
+    Integration Tests: Validates the integrity of the local 'models.json' file.
+    Ensures the application has a valid fallback database embedded.
     """
 
     def setUp(self):
-        self.config_url = AppConfig.REMOTE_CONFIG_URL
+        self.config_path = os.path.join(SRC_PATH, "modules", "models.json")
         self.start_time = time.perf_counter()
         logger.info(f"--- Starting Test: {self._testMethodName} ---")
 
@@ -93,34 +93,57 @@ class TestRemoteConfiguration(unittest.TestCase):
         duration = (time.perf_counter() - self.start_time) * 1000
         logger.info(f"Test Duration: {duration:.2f}ms\n")
 
-    def test_fetch_and_display_jsonsilo_config(self):
+    def test_local_json_integrity(self):
         """
-        Fetches remote configuration, validates HTTP status,
-        checks JSON integrity, and logs the content summary.
+        Reads 'src/modules/models.json', verifies JSON syntax,
+        and checks for required fields in model definitions.
         """
+        if not os.path.exists(self.config_path):
+            self.fail(f"Configuration file missing at: {self.config_path}")
+
         try:
-            logger.info(f"Connecting to remote configuration: {self.config_url}")
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
-            response = requests.get(self.config_url, timeout=10)
+            self.assertIsInstance(data, list, "Root element must be a list")
+            self.assertGreater(len(data), 0, "Model list should not be empty")
 
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch config. Code: {response.status_code}")
-                self.fail(f"HTTP Error: {response.status_code}")
+            # Validate basic structure of model entries
+            model_count = 0
+            for item in data:
+                # Skip config objects (like "advanced_models" lists)
+                if "name" in item and "provider" in item:
+                    model_count += 1
+                    # Check for required fields
+                    self.assertIn(
+                        "tokens_per_minute",
+                        item,
+                        f"Missing token limit in {item['name']}",
+                    )
 
-            data = response.json()
-            self.assertIsInstance(data, list, "Root JSON element must be a list")
+                    # Check translations
+                    if "advantage" in item and isinstance(item["advantage"], dict):
+                        adv = item["advantage"]
+                        self.assertIn(
+                            "en", adv, f"Missing EN translation for {item['name']}"
+                        )
+                        self.assertIn(
+                            "fr", adv, f"Missing FR translation for {item['name']}"
+                        )
+                        self.assertIn(
+                            "es", adv, f"Missing ES translation for {item['name']}"
+                        )
 
-            model_count = len([x for x in data if "name" in x])
             logger.info(
-                f"Validation successful. {model_count} models found in configuration."
+                f"Validation successful. {model_count} valid model definitions found."
             )
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Network Error: {e}")
-            self.fail("Network connection failed")
         except json.JSONDecodeError as e:
             logger.error(f"JSON Parsing Error: {e}")
-            self.fail("Invalid JSON format received")
+            self.fail("Invalid JSON format in models.json")
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            self.fail(str(e))
 
 
 class TestAPIHealthAndLatency(unittest.TestCase):
@@ -133,6 +156,7 @@ class TestAPIHealthAndLatency(unittest.TestCase):
         "GROQ_AI": "https://api.groq.com/openai/v1/models",
         "DEEPGRAM": "https://api.deepgram.com",
         "CEREBRAS": "https://api.cerebras.ai",
+        "GITHUB_API": "https://api.github.com",
     }
 
     def setUp(self):
@@ -142,6 +166,7 @@ class TestAPIHealthAndLatency(unittest.TestCase):
         """Helper to measure HTTP latency."""
         try:
             start = time.perf_counter()
+            # Timeout set to 5s to fail fast
             requests.get(url, timeout=5)
             latency = (time.perf_counter() - start) * 1000
 
@@ -160,7 +185,10 @@ class TestAPIHealthAndLatency(unittest.TestCase):
         """Iterates through defined providers and verifies connectivity."""
         for name, url in self.ENDPOINTS.items():
             is_reachable = self._measure_latency(name, url)
-            if name != "Cerebras":  # Cerebras sometimes blocks generic pings
+            if name not in [
+                "Cerebras",
+                "GITHUB_API",
+            ]:  # Cerebras/GitHub sometimes block generic pings
                 self.assertTrue(is_reachable, f"{name} should be reachable")
 
 
@@ -200,8 +228,8 @@ class TestInternalLogic(unittest.TestCase):
 
 class TestUpdateMechanism(unittest.TestCase):
     """
-    Unit Tests: Validates semantic version comparison logic.
-    Crucial to ensure updates are only proposed when necessary.
+    Unit/Integration Tests: Validates semantic version comparison logic
+    and connectivity to the GitHub Releases API.
     """
 
     def setUp(self):
@@ -220,6 +248,25 @@ class TestUpdateMechanism(unittest.TestCase):
 
         # Case: Local version newer (Dev mode or Remote < Local)
         self.assertEqual(self.update_manager._compare_versions("0.9.9", "1.0.0"), -1)
+
+    def test_github_api_connectivity(self):
+        """Ensures the AppConfig GITHUB URL is reachable."""
+        url = AppConfig.GITHUB_RELEASES_URL
+        try:
+            logger.info(f"Pinging GitHub Releases: {url}")
+            response = requests.get(url, timeout=5)
+            # 200 OK or 404 (if no release yet) are "reachable" statuses.
+            # 403 indicates rate limit but reachable.
+            # ConnectionError would indicate unreachable.
+            if response.status_code in [200, 404, 403]:
+                logger.info(f"GitHub API reachable. Status: {response.status_code}")
+            else:
+                logger.warning(
+                    f"GitHub API returned unexpected status: {response.status_code}"
+                )
+        except Exception as e:
+            logger.error(f"GitHub API Unreachable: {e}")
+            self.fail("Could not connect to GitHub API URL defined in AppConfig")
 
 
 class TestDataPersistence(unittest.TestCase):
