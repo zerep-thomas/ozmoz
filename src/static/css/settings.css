@@ -215,7 +215,7 @@ body {
 .sidebar-item-update:hover {
   background-color: #d0ced3;
   border-color: rgba(0, 0, 0, 0.15);
-  transform: translateY(-1px);
+  filter: brightness(0.95);
 }
 
 .sidebar-item-update.downloading {
@@ -252,6 +252,7 @@ body {
 .button:hover {
   background-color: var(--color-hover);
   border-color: rgba(255, 255, 255, 0.2);
+  transform: none;
 }
 
 .button:active {
@@ -267,7 +268,7 @@ body {
 
 .button.primary:hover {
   background-color: var(--color-accent-hover);
-  transform: scale(1.02);
+  transform: none;
 }
 
 .button.danger {
@@ -2528,7 +2529,7 @@ li:has(> p) > p {
 }
 
 #save-api-keys-btn:hover {
-  transform: translateY(-2px);
+  filter: brightness(0.9);
   background-color: #8a4be0;
 }
 
