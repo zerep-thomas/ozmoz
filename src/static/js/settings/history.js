@@ -47,7 +47,7 @@ window.displayTranscripts = (dataToDisplay) => {
   let md = null;
   if (typeof window.markdownit !== "undefined") {
     md = window.markdownit({
-      html: true,
+      html: false,
       linkify: true,
       breaks: true,
       typographer: true,

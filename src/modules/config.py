@@ -17,10 +17,9 @@ class AppConfig:
     VERSION: str = "1.1.2"
     MUTEX_ID: str = "{f7c9acc6-46a7-4712-89f5-171549439308}-Ozmoz"
 
-    _DEFAULT_REMOTE_URL: str = (
-        "https://usc-01-api.jsonsilo.com/public/48a9387f-baf9-4324-8cde-9be8906a836e"
+    GITHUB_RELEASES_URL: str = (
+        "https://api.github.com/repos/zerep-thomas/ozmoz/releases/latest"
     )
-    REMOTE_CONFIG_URL: str = os.getenv("OZMOZ_REMOTE_CONFIG_URL", _DEFAULT_REMOTE_URL)
 
     AUDIO_CHUNK: int = 512
     AUDIO_FORMAT: int = pyaudio.paInt16
@@ -94,6 +93,7 @@ class AppState:
 
         # Functional State
         self.is_recording: bool = False
+        self.current_recording_path: Optional[str] = None
         self.is_busy: bool = False
         self.is_exiting: bool = False
         self.ai_recording: bool = False

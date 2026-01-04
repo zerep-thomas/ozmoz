@@ -209,8 +209,9 @@ function updateRenderedContent() {
 
   // Configure Markdown parser
   const md = window.markdownit({
-    html: true,
+    html: false,
     linkify: true,
+    breaks: true,
     highlight: (str, lang) => {
       if (lang && window.hljs?.getLanguage(lang)) {
         try {

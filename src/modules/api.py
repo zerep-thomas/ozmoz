@@ -971,10 +971,21 @@ class API:
 
     def get_api_configuration(self) -> Dict[str, str]:
         """
-        Sends existing keys to the frontend to pre-fill fields.
+        Sends existing keys to the frontend masked for security.
         """
         try:
-            return self._config_manager.credential_manager.get_raw_keys_for_ui()
+            raw_keys = self._config_manager.credential_manager.get_raw_keys_for_ui()
+            masked_keys = {}
+
+            for key, value in raw_keys.items():
+                if value and len(value) > 4:
+                    masked_keys[key] = "************************"
+                elif value:
+                    masked_keys[key] = "************************"
+                else:
+                    masked_keys[key] = ""
+
+            return masked_keys
         except Exception as error:
             logging.error(f"Error in get_api_configuration: {error}")
             return {}
@@ -982,7 +993,7 @@ class API:
     def save_api_keys(self, data: Dict[str, str]) -> Dict[str, Union[bool, str]]:
         """
         Receives data from the settings form and saves API keys.
-        data format: { 'api-key-groq-audio': '...', 'api-key-deepgram': '...', ... }
+        Ignores fields that contain the security mask '************************'.
         """
         try:
             mapping = {
@@ -993,9 +1004,14 @@ class API:
             }
 
             clean_data = {}
+
             for html_id, internal_id in mapping.items():
-                value = data.get(html_id, "").strip()
-                clean_data[internal_id] = value
+                new_value = data.get(html_id, "").strip()
+
+                if new_value == "************************":
+                    continue
+
+                clean_data[internal_id] = new_value
 
             success = self._config_manager.credential_manager.save_credentials(
                 clean_data

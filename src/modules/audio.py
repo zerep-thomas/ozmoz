@@ -133,7 +133,13 @@ class AudioManager:
             target=self._play_sound_and_mute_in_background, daemon=True
         ).start()
 
-        temp_path = os.path.join(tempfile.gettempdir(), AppConfig.AUDIO_OUTPUT_FILENAME)
+        import uuid
+
+        unique_filename = f"ozmoz_rec_{uuid.uuid4().hex}.wav"
+        temp_path = os.path.join(tempfile.gettempdir(), unique_filename)
+
+        self.app_state.current_recording_path = temp_path
+
         threading.Thread(
             target=self._record_audio_worker, args=(temp_path,), daemon=True
         ).start()
@@ -527,6 +533,13 @@ class TranscriptionManager:
         if not self.app_state.is_recording:
             return timing_tracker
 
+        current_audio_file = getattr(self.app_state, "current_recording_path", None)
+
+        if not current_audio_file:
+            current_audio_file = os.path.join(
+                self.temp_dir, AppConfig.AUDIO_OUTPUT_FILENAME
+            )
+
         rec_duration = time.time() - self.app_state.recording_start_time
         self.app_state.is_recording = False
 
@@ -560,11 +573,12 @@ class TranscriptionManager:
 
             if self.app_state.sound_enabled:
                 self.sound_manager.play("beep_off")
-            if not self._wait_for_file(self.audio_file):
+
+            if not self._wait_for_file(current_audio_file):
                 return timing_tracker
 
             transcribed_text = self.transcription_service.transcribe(
-                self.audio_file, self.app_state.language, rec_duration
+                current_audio_file, self.app_state.language, rec_duration
             )
 
             if transcribed_text == "Error: Local model not found":
@@ -634,10 +648,11 @@ class TranscriptionManager:
         finally:
             self.app_state.is_busy = False
             self.app_state.recording_start_time = 0.0
+
             try:
-                if os.path.exists(self.audio_file):
+                if current_audio_file and os.path.exists(current_audio_file):
                     threading.Thread(
-                        target=os.remove, args=(self.audio_file,), daemon=True
+                        target=os.remove, args=(current_audio_file,), daemon=True
                     ).start()
                 if self.app_state.window:
                     self.app_state.window.evaluate_js("setSettingsButtonState(false);")
