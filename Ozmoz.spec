@@ -17,6 +17,7 @@ icon_path = os.path.join(src_path, 'static', 'img', 'icons', 'icon.ico')
 datas = [
     ('src/templates', 'src/templates'),
     ('src/static', 'src/static'),
+    ('src/modules', 'src/modules'),
     ('bin', 'bin'),
     ('README.md', '.'),
     ('LICENSE', '.'),
@@ -31,7 +32,6 @@ spec_setuptools = importlib.util.find_spec('setuptools')
 if spec_setuptools and spec_setuptools.origin:
     setuptools_root = os.path.dirname(spec_setuptools.origin)
     
-    # Path to the potentially missing file
     lorem_source = os.path.join(setuptools_root, '_vendor', 'jaraco', 'text', 'Lorem ipsum.txt')
     
     if os.path.exists(lorem_source):
@@ -50,7 +50,7 @@ hidden_imports = [
     'PySide6',
     'jaraco.text',
     'inflect',
-    'pkg_resources.extern'
+    'pkg_resources.extern',
 ]
 
 # --- Analysis Phase ---
@@ -63,7 +63,6 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    # Exclude large or unnecessary standard libraries to reduce size
     excludes=['PyQt5', 'tkinter', 'matplotlib', 'notebook', 'scipy', 'pandas'], 
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -80,12 +79,12 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Ozmoz', # Product Name
+    name='Ozmoz',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True, # Compress the final executable
-    console=False, # Create a windowed (GUI) application
+    upx=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -104,5 +103,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Ozmoz', # Output folder name
+    name='Ozmoz',
 )
