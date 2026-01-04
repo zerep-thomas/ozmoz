@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import keyring
 import requests
+from cryptography.fernet import Fernet
 
 # Internal imports
 from modules.config import AppConfig, AppState, app_state
@@ -23,23 +24,24 @@ AGENTS_FILE: Path = PathManager.get_user_data_path("data/agents.json")
 
 class CredentialManager:
     """
-    Manages API keys via the native OS vault (Windows Credential Locker).
-
-    Priority for key retrieval:
-    1. OS Keyring (Service: "OzmozApp")
-    2. Environment Variables (fallback for dev/CI)
+    Manages API keys via the native OS vault.
+    Now also manages the Encryption Key for local data.
     """
 
     SERVICE_NAME: str = "OzmozApp"
-    KNOWN_KEYS: List[str] = ["groq_audio", "deepgram", "groq_ai", "cerebras"]
+    KNOWN_KEYS: List[str] = [
+        "groq_audio",
+        "deepgram",
+        "groq_ai",
+        "cerebras",
+        "local_encryption_key",
+    ]
 
     def __init__(self) -> None:
-        """Initialize the manager and load existing keys into memory cache."""
         self._cache: Dict[str, str] = {}
         self._load_from_os_store()
 
     def _load_from_os_store(self) -> None:
-        """Loads keys from the OS vault into the local cache."""
         for key_name in self.KNOWN_KEYS:
             try:
                 secret: Optional[str] = keyring.get_password(
@@ -49,6 +51,21 @@ class CredentialManager:
                     self._cache[key_name] = secret
             except Exception as error:
                 logging.error(f"Error loading Keyring ({key_name}): {error}")
+
+    def get_encryption_key(self) -> bytes:
+        """
+        Retrieves or generates the symmetric encryption key (Fernet).
+        """
+        key = self._cache.get("local_encryption_key")
+
+        if not key:
+            logging.info("Generating new local encryption key...")
+            new_key = Fernet.generate_key().decode("utf-8")
+            keyring.set_password(self.SERVICE_NAME, "local_encryption_key", new_key)
+            self._cache["local_encryption_key"] = new_key
+            key = new_key
+
+        return key.encode("utf-8")
 
     def save_credentials(self, keys_dict: Dict[str, str]) -> bool:
         """
@@ -513,25 +530,68 @@ class ReplacementManager:
 
 
 class HistoryManager:
-    """Manages the history of transcribed or generated text."""
+    """
+    Manages the history of transcribed or generated text.
+    NOW SECURED: Data is encrypted at rest using Fernet (AES-128).
+    """
 
-    def __init__(self, history_file: Path) -> None:
+    def __init__(
+        self, history_file: Path, credential_manager: CredentialManager
+    ) -> None:
         self.history_file = history_file
         self.history_file.parent.mkdir(parents=True, exist_ok=True)
 
+        key = credential_manager.get_encryption_key()
+        self.fernet = Fernet(key)
+
     def get_all(self) -> List[Dict[str, Any]]:
-        """Retrieves the full history list."""
-        if self.history_file.exists():
+        """Retrieves and decrypts the full history list."""
+        if not self.history_file.exists():
+            return []
+
+        try:
+            with open(self.history_file, "rb") as file_handle:
+                file_content = file_handle.read()
+
+            if not file_content:
+                return []
+
             try:
-                return json.loads(self.history_file.read_text(encoding="utf-8")).get(
-                    "history", []
-                )
+                decrypted_content = self.fernet.decrypt(file_content)
+                return json.loads(decrypted_content.decode("utf-8")).get("history", [])
             except Exception:
-                pass
-        return []
+                logging.warning(
+                    "History file appears to be plaintext. Migrating to encrypted storage..."
+                )
+                try:
+                    plain_data = json.loads(file_content.decode("utf-8")).get(
+                        "history", []
+                    )
+                    self.save_history(plain_data)
+                    return plain_data
+                except Exception as e:
+                    logging.error(f"Failed to migrate history: {e}")
+                    return []
+
+        except Exception as e:
+            logging.error(f"Error reading history: {e}")
+            return []
+
+    def save_history(self, history: List[Dict[str, Any]]) -> bool:
+        """Helper to encrypt and save data."""
+        try:
+            json_str = json.dumps({"history": history}, indent=4)
+            encrypted_data = self.fernet.encrypt(json_str.encode("utf-8"))
+
+            with open(self.history_file, "wb") as file_handle:
+                file_handle.write(encrypted_data)
+            return True
+        except Exception as e:
+            logging.error(f"Error saving encrypted history: {e}")
+            return False
 
     def add_entry(self, text: str) -> None:
-        """Adds a new text entry to the history file."""
+        """Adds a new text entry to the history file (Encrypted)."""
         if not text:
             return
         try:
@@ -541,26 +601,19 @@ class HistoryManager:
                 "text": text,
                 "timestamp": int(time.time() * 1000),
             }
-            # Insert at the beginning
             history.insert(0, new_entry)
 
-            # Limit history to 10000 entries
             if len(history) > 10000:
                 history = history[:10000]
 
-            with open(self.history_file, "w", encoding="utf-8") as file_handle:
-                json.dump({"history": history}, file_handle, indent=4)
+            self.save_history(history)
+
         except Exception as error:
-            logging.error(f"History error: {error}")
+            logging.error(f"History add error: {error}")
 
     def clear(self) -> bool:
         """Clears all history."""
-        try:
-            with open(self.history_file, "w", encoding="utf-8") as file_handle:
-                json.dump({"history": []}, file_handle, indent=4)
-            return True
-        except Exception:
-            return False
+        return self.save_history([])
 
 
 class AgentManager:

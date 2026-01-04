@@ -126,7 +126,10 @@ class OzmozApp:
         self.replacement_manager = ReplacementManager(
             file_path=self.paths["replacements"]
         )
-        self.history_manager = HistoryManager(history_file=self.paths["history"])
+        self.history_manager = HistoryManager(
+            history_file=self.paths["history"],
+            credential_manager=self.credential_manager,
+        )
         self.stats_manager = StatsManager(
             app_state=app_state,
             config_manager=self.config_manager,

@@ -10,7 +10,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pyautogui
 import pyperclip
-import requests
+
+# requests import removed (OCR dependency eliminated)
 import win32con
 import win32gui
 from cerebras.cloud.sdk import Cerebras
@@ -22,8 +23,11 @@ from modules.config import AppConfig
 class ContextManager:
     """
     Manages the context window for LLMs.
-    Handles token counting approximation, text truncation, and history compression
-    to fit within model limits.
+
+    Responsibilities:
+    - Token counting approximation (heuristic based).
+    - Dynamic history compression (FIFO with semantic preservation).
+    - Payload truncation to ensure API compliance.
     """
 
     def __init__(self, app_state: Any) -> None:
@@ -31,13 +35,8 @@ class ContextManager:
 
     def get_model_context_limit(self, model_id: str) -> int:
         """
-        Retrieves the maximum token limit for a specific model from the cached configuration.
-
-        Args:
-            model_id (str): The identifier of the model.
-
-        Returns:
-            int: The token limit (default is 6000).
+        Retrieves the effective token limit for a specific model from the cached configuration.
+        Defaults to a safe fallback if config is unreachable.
         """
         default_limit = 6000
         if not self.app_state.cached_remote_config:
@@ -50,27 +49,15 @@ class ContextManager:
 
     def count_tokens_approx(self, text: str) -> int:
         """
-        Provides a quick estimation of token count based on character length.
-        Approximation: 1 token ~ 3 characters.
-
-        Args:
-            text (str): The text to analyze.
-
-        Returns:
-            int: The estimated number of tokens.
+        Heuristic token counting (approx. 1 token ~= 3 chars).
+        Used for low-latency pre-flight checks before API calls.
         """
         return len(text) // 3 if text else 0
 
     def truncate_text_by_tokens(self, text: str, max_tokens: int) -> str:
         """
-        Truncates text to fit within a specific token count.
-
-        Args:
-            text (str): The input text.
-            max_tokens (int): The maximum allowed tokens.
-
-        Returns:
-            str: The truncated text.
+        Hard truncation of text to fit within a specific token budget.
+        Attempts to cut at word boundaries for legibility.
         """
         if not text or self.count_tokens_approx(text) <= max_tokens:
             return text
@@ -90,23 +77,18 @@ class ContextManager:
         self,
         fixed_prompt: str,
         history: List[Dict[str, Any]],
-        image_text: str,
         selected_text: str,
         model_limit: int,
-    ) -> Tuple[List[Dict[str, Any]], str, str]:
+    ) -> Tuple[List[Dict[str, Any]], str]:
         """
-        Intelligently reduces history and contextual data (OCR, Selection)
-        to fit within the model's context window.
+        Optimizes the payload to fit within the model's context window.
 
-        Args:
-            fixed_prompt (str): The system prompt or immutable instructions.
-            history (List[Dict]): The conversation history.
-            image_text (str): Text extracted via OCR.
-            selected_text (str): Text selected by the user.
-            model_limit (int): The total token limit of the model.
+        Strategy:
+        1. Calculate total estimated load.
+        2. If over limit, compress History (keep System + last exchange).
+        3. If still over limit, truncate User Selection.
 
-        Returns:
-            Tuple: Compressed history, image text, and selected text.
+        Note: OCR logic has been completely removed to rely on Multimodal Vision.
         """
         RESPONSE_BUFFER = 1024
         target_limit = model_limit - RESPONSE_BUFFER
@@ -119,25 +101,23 @@ class ContextManager:
                     if isinstance(message.get("content"), str)
                 ]
             )
-            return self.count_tokens_approx(
-                fixed_prompt + history_text + image_text + selected_text
-            )
+            return self.count_tokens_approx(fixed_prompt + history_text + selected_text)
 
         initial_tokens = calculate_total_tokens()
         if initial_tokens <= target_limit:
-            return history, image_text, selected_text
+            return history, selected_text
 
-        # Compression strategy constants
+        # --- Compression Strategy ---
         MIN_HISTORY_TOKENS = 300
-        OCR_PRIORITY = 0.7
         SELECTED_PRIORITY = 0.9
 
-        # 1. History Compression (Keep System prompt + last 2 exchanges)
+        # 1. History Compression (Keep System prompt + last complete exchange)
         if history:
             system_messages = [m for m in history if m.get("role") == "system"]
             conversation_pairs = []
             buffer = []
 
+            # Iterate backwards to find the most recent conversation pairs
             for message in reversed(history):
                 if message.get("role") in ["user", "assistant"]:
                     buffer.append(message)
@@ -151,6 +131,7 @@ class ContextManager:
                 msg for pair in keep_pairs for msg in pair
             ]
 
+            # Truncate content within the kept history messages
             for message in compressed_history:
                 if isinstance(message.get("content"), str):
                     message["content"] = self.truncate_text_by_tokens(
@@ -162,13 +143,7 @@ class ContextManager:
         else:
             current_tokens = initial_tokens
 
-        # 2. OCR Reduction
-        if current_tokens > target_limit and image_text:
-            keep_count = int(self.count_tokens_approx(image_text) * OCR_PRIORITY)
-            image_text = self.truncate_text_by_tokens(image_text, keep_count)
-            current_tokens = calculate_total_tokens()
-
-        # 3. Selection Reduction
+        # 2. Selection Reduction (No OCR/ImageText reduction needed anymore)
         if current_tokens > target_limit and selected_text:
             keep_count = int(
                 self.count_tokens_approx(selected_text) * SELECTED_PRIORITY
@@ -176,31 +151,28 @@ class ContextManager:
             selected_text = self.truncate_text_by_tokens(selected_text, keep_count)
             current_tokens = calculate_total_tokens()
 
-        # 4. Final proportional cut if necessary
-        if current_tokens > target_limit:
+        # 3. Final Safety Cut
+        if current_tokens > target_limit and selected_text:
             excess_tokens = current_tokens - target_limit
-            total_length = len(image_text) + len(selected_text)
-            if total_length > 0:
-                image_ratio = len(image_text) / total_length
-                selection_ratio = len(selected_text) / total_length
-
-                if image_text:
-                    cut_amount = max(int(excess_tokens * image_ratio * 4), 0)
-                    image_text = image_text[:-cut_amount]
-                if selected_text:
-                    cut_amount = max(int(excess_tokens * selection_ratio * 4), 0)
-                    selected_text = selected_text[:-cut_amount]
+            # Rough char conversion for final cut
+            cut_amount = max(int(excess_tokens * 3.5), 0)
+            selected_text = selected_text[:-cut_amount]
 
         logging.info(
             f"Context optimized: {initial_tokens} -> {calculate_total_tokens()} tokens."
         )
-        return history, image_text, selected_text
+        return history, selected_text
 
 
 class GenerationController:
     """
-    Central Controller (Facade) for generation operations (Text, Web, Vision).
-    Manages preconditions, audio recording, UI loading states, and API streaming.
+    Facade Controller for all generation workflows (Text, Web, Vision).
+
+    Responsibilities:
+    - State validation (Hotkeys, UI Locks).
+    - Audio Lifecycle (Recording, VAD hooks).
+    - API Client Warmup (Latency reduction).
+    - UI Feedback (Streaming, Loading states).
     """
 
     def __init__(
@@ -227,14 +199,12 @@ class GenerationController:
         self.config_manager = config_manager
         self.credential_manager = credential_manager
 
-    # --- Validation & State ---
+    # --- Validation & State Management ---
 
     def validate_preconditions(self) -> Tuple[bool, Optional[str]]:
         """
-        Checks hotkey health, application busy state, and settings menu status.
-
-        Returns:
-            Tuple[bool, Optional[str]]: (Is valid, Error message if invalid).
+        Ensures the system is in a valid state to start a generation cycle.
+        Checks for hotkey stability and concurrent operations.
         """
         start_time = time.time()
 
@@ -242,7 +212,7 @@ class GenerationController:
             self.system_health_manager
             and not self.system_health_manager._validate_hotkey_state()
         ):
-            logging.warning("Unstable hotkeys. Forcing re-registration.")
+            logging.warning("Unstable hotkeys detected. Forcing re-registration.")
             self.hotkey_manager.register_all()
             return False, None
 
@@ -250,7 +220,7 @@ class GenerationController:
             return False, None
 
         if self.app_state.is_busy:
-            logging.debug("Generation skipped: Application busy.")
+            logging.debug("Generation skipped: Application busy lock active.")
             return False, None
 
         logging.debug(f"Preconditions validated ({time.time() - start_time:.3f}s).")
@@ -258,8 +228,8 @@ class GenerationController:
 
     def warmup(self) -> None:
         """
-        Pre-initializes LLM clients (Cerebras/Groq) in a background thread
-        to reduce initial latency by ~0.5s.
+        Asynchronously initializes LLM clients (Cerebras/Groq) to eliminate
+        first-request latency spikes (Cold Start mitigation).
         """
 
         def _warmup_worker() -> None:
@@ -281,11 +251,11 @@ class GenerationController:
 
     def force_reset_state_after_timeout(self) -> None:
         """
-        Safety mechanism to reset the application state if an operation
-        hangs for too long.
+        Watchdog mechanism to release application locks if an operation hangs.
+        Prevents the UI from becoming permanently unresponsive.
         """
         if self.app_state.is_busy:
-            logging.warning("Operation timeout detected. Forcing reset.")
+            logging.warning("Operation watchdog triggered. Forcing state reset.")
             try:
                 if self.window:
                     error_message = "The operation took too long. Please try again."
@@ -300,17 +270,12 @@ class GenerationController:
             self.app_state.is_recording = False
             self.app_state.ai_recording = False
 
-    # --- Audio Management ---
+    # --- Audio Workflow ---
 
     def start_recording(self, css_class: str = "ai-recording") -> str:
         """
-        Prepares the UI and starts the audio recording thread.
-
-        Args:
-            css_class (str): The CSS class to apply to the UI button (defines mode).
-
-        Returns:
-            str: Path to the temporary audio file.
+        Initiates the audio capture workflow.
+        Handles UI state transitions and spawns the recording thread.
         """
         logging.info(f"Start recording ({css_class})...")
 
@@ -351,7 +316,7 @@ class GenerationController:
         except Exception as e:
             logging.error(f"JS Start Recording Error: {e}")
 
-        # Ensure audio is initialized
+        # Ensure audio subsystem is ready
         self.audio_manager.initialize()
 
         temp_dir = tempfile.gettempdir()
@@ -359,9 +324,9 @@ class GenerationController:
 
         self.app_state.is_recording = True
 
-        # --- VAD Callback for AI ---
+        # --- Voice Activity Detection (VAD) Callback ---
         def vad_callback() -> None:
-            logging.info("VAD detected silence during AI recording. Stopping.")
+            logging.info("VAD detected silence during AI recording. Triggering stop.")
             self.app_state.is_recording = False
 
         threading.Thread(
@@ -376,13 +341,8 @@ class GenerationController:
 
     def stop_recording(self, css_class: str = "ai-recording") -> Tuple[str, float]:
         """
-        Stops the recording, restores sound and UI state.
-
-        Args:
-            css_class (str): The CSS class used during start.
-
-        Returns:
-            Tuple[str, float]: (Path to audio file, Duration in seconds).
+        Finalizes the recording session, restores system volume, and updates UI.
+        Returns the file path and duration for downstream processing.
         """
         logging.info(f"Stop recording ({css_class}).")
 
@@ -423,7 +383,7 @@ class GenerationController:
 
     def cleanup_recording_ui(self, css_class: str = "ai-recording") -> None:
         """
-        Resets the UI elements related to recording in case of cancellation or error.
+        Emergency cleanup of UI elements if recording is aborted or fails.
         """
         self.app_state.ai_recording = False
         self.app_state.is_busy = False
@@ -441,7 +401,7 @@ class GenerationController:
 
     def show_loading_ui(self) -> None:
         """
-        Injects and displays the 'Thinking' or loading animation in the UI.
+        Injects and renders the indeterminate loading state (Thinking animation).
         """
         try:
             self.window.evaluate_js(
@@ -491,7 +451,7 @@ class GenerationController:
 
     def reset_ui_for_new_generation(self) -> None:
         """
-        Clears previous AI responses and resets the UI layout.
+        Clears previous AI responses and resets the UI layout for a fresh interaction.
         """
         if self.app_state.is_ai_response_visible:
             try:
@@ -504,7 +464,7 @@ class GenerationController:
 
     def _get_model_provider(self, model_id: str) -> str:
         """
-        Identifies the provider (e.g., 'groq', 'cerebras') for a given model ID.
+        Resolves the provider (Groq/Cerebras) for a given model ID based on config.
         """
         if not self.app_state.cached_remote_config:
             self.config_manager.load_and_parse_remote_config()
@@ -523,16 +483,14 @@ class GenerationController:
         processing_mode: str = "text",
     ) -> Optional[str]:
         """
-        Executes the AI API call (Streaming) and updates the UI.
+        Executes the AI API call with Server-Sent Events (Streaming).
+        Updates the Frontend in real-time as tokens are received.
 
         Args:
-            messages (List[Dict]): The conversation history and prompt.
-            model (str): The model identifier.
-            show_streaming (bool): Whether to stream tokens to the UI.
-            processing_mode (str): 'text', 'vision', or 'web'.
-
-        Returns:
-            Optional[str]: The final complete response string, or None if error.
+            messages: Conversation history.
+            model: Model identifier.
+            show_streaming: If True, streams tokens to UI.
+            processing_mode: 'text', 'vision', or 'web'.
         """
         start_time = time.time()
 
@@ -577,7 +535,7 @@ class GenerationController:
             return None
 
     def _call_groq(self, messages: List[Dict[str, Any]], model: str) -> Any:
-        """Groq specific logic with Client Caching."""
+        """Groq-specific implementation with Client Caching."""
         if self.app_state.groq_client is None:
             api_key = self.credential_manager.get_api_key("groq_ai")
             if not api_key:
@@ -606,8 +564,7 @@ class GenerationController:
         return client.chat.completions.create(**params)
 
     def _call_cerebras(self, messages: List[Dict[str, Any]], model: str) -> Any:
-        """Cerebras specific logic with Client Caching."""
-        # Check cache
+        """Cerebras-specific implementation with Client Caching."""
         if self.app_state.cerebras_client is None:
             api_key = self.credential_manager.get_api_key("cerebras")
             if not api_key:
@@ -629,7 +586,7 @@ class GenerationController:
 
     def _process_stream(self, stream: Any, show_streaming: bool) -> str:
         """
-        Consumes the API stream, handles 'thinking' tags, and updates the UI.
+        Consumes the API stream, handles 'thinking' tags (CoT), and updates the UI buffer.
         """
         full_result = ""
         buffer = ""
@@ -703,7 +660,7 @@ class GenerationController:
     # --- File Utilities ---
 
     def safe_remove_file(self, path: Optional[str]) -> None:
-        """Removes a file if it exists, ignoring errors."""
+        """Removes a file if it exists, ignoring OS errors (Best Effort)."""
         if path and os.path.exists(path):
             try:
                 os.remove(path)
@@ -719,7 +676,10 @@ class GenerationController:
 
 
 class VisionManager:
-    """Manages screen capture and preparation for multimodal models."""
+    """
+    Manages screen capture and payload preparation for Multimodal LLMs.
+    Note: Legacy OCR fallback has been removed in favor of pure Vision models.
+    """
 
     def __init__(
         self,
@@ -743,7 +703,7 @@ class VisionManager:
 
     def select_best_vision_model(self) -> str:
         """
-        Selects the most appropriate vision-capable model based on availability.
+        Auto-selects the optimal vision-capable model based on availability.
         """
         available_models = self.config_manager.fetch_ai_models()
 
@@ -763,29 +723,28 @@ class VisionManager:
 
         return self.app_state.model
 
-    def process_vision_capture(
-        self, model: str
-    ) -> Tuple[Optional[str], Optional[str], str]:
+    def process_vision_capture(self, model: str) -> Tuple[Optional[str], Optional[str]]:
         """
-        Captures the screen and prepares the data (Base64).
-        SECURITY: OCR fallback via third-party API has been removed to prevent data leakage.
+        Captures the screen and encodes it to Base64 for the API.
+
+        Security Note: Captures are only performed if a Multimodal model is selected.
+        No third-party OCR is involved.
         """
         file_path = self.screen_manager.capture()
         base64_image = None
-        extracted_text = ""
 
         if file_path:
             if self.config_manager.check_if_model_is_multimodal(model):
                 base64_image = self.screen_manager.convert_image_to_base64(file_path)
             else:
                 logging.warning(
-                    "Vision attempted with non-multimodal model. Capture ignored to prevent data leak."
+                    "Vision attempted with non-multimodal model. Capture aborted to prevent data leak."
                 )
 
-        return file_path, base64_image, extracted_text
+        return file_path, base64_image
 
-    def build_vision_system_prompt(self, ocr_text: Optional[str] = None) -> str:
-        """Creates the system prompt for vision-related tasks."""
+    def build_vision_system_prompt(self) -> str:
+        """Constructs the system prompt specialized for visual analysis."""
         date_str = datetime.now().strftime("%A, %B %d, %Y")
         prompt = f"""# ROLE
 You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today is {date_str}.
@@ -799,7 +758,7 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
 
     def generate_screen_vision_text(self) -> None:
         """
-        Main workflow for Vision: Record -> Transcribe -> Capture Screen -> Generate Analysis.
+        Executes the Vision Workflow: Record -> Transcribe -> Capture Screen -> Analyze.
         """
         start_time = time.time()
         logging.info("Vision workflow started.")
@@ -809,7 +768,7 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
             m for m in self.app_state.screen_vision_model_list if m in available_models
         ]
 
-        # Check if current selected model is multimodal fallback
+        # Fail-fast if no suitable model is found
         if (
             not compatible_models
             and not self.config_manager.check_if_model_is_multimodal(
@@ -886,10 +845,9 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
             self.stats_manager.update_stats(transcript, duration, is_generation=True)
 
             model = self.select_best_vision_model()
-            screen_path, base64_img, _ = self.process_vision_capture(model)
+            screen_path, base64_img = self.process_vision_capture(model)
 
             if not base64_img:
-                # Abort if no image generated (e.g. non-multimodal model selected)
                 raise ValueError("Selected model cannot process images.")
 
             if not self.app_state.is_ai_response_visible:
@@ -955,7 +913,7 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
 
 
 class WebSearchManager:
-    """Manages web search: specific prompts, model selection, and workflow."""
+    """Manages web search context, model selection, and prompting."""
 
     def __init__(
         self,
@@ -976,7 +934,7 @@ class WebSearchManager:
         self.generation_controller = generation_controller
 
     def build_web_search_system_prompt(self, selected_text: str) -> str:
-        """Creates the prompt specialized for web searching."""
+        """Creates the prompt specialized for web searching agents."""
         date_str = datetime.now().strftime("%A, %B %d, %Y")
         base_prompt = f"""# ROLE
 You are Ozmoz, a direct and efficient desktop AI assistant. Today is {date_str}.
@@ -1002,7 +960,7 @@ You are Ozmoz, a direct and efficient desktop AI assistant. Today is {date_str}.
         return context
 
     def select_best_web_model(self) -> str:
-        """Selects a model capable of web search (Tools or Browsing)."""
+        """Selects a model capable of web search (Tools or Browsing capabilities)."""
         available_models = self.config_manager.fetch_ai_models()
 
         for model_id in self.app_state.web_search_model_list:
@@ -1017,7 +975,7 @@ You are Ozmoz, a direct and efficient desktop AI assistant. Today is {date_str}.
 
     def generate_web_search_text(self) -> None:
         """
-        Main workflow for Web Search: Record -> Transcribe -> Get Selection -> Generate.
+        Executes Web Search Workflow: Record -> Transcribe -> Get Selection -> Generate.
         """
         start_time = time.time()
         logging.info("Web Search workflow started.")
@@ -1154,8 +1112,10 @@ You are Ozmoz, a direct and efficient desktop AI assistant. Today is {date_str}.
 
 class aiGenerationManager:
     """
-    Manages standard text generation, Agents (custom prompts),
-    and context capture (Selection/OCR).
+    Manages text generation, Agent execution, and Context Aggregation.
+
+    Refactored: Legacy OCR logic has been completely removed.
+    Context is now strictly derived from System Clipboard and Multimodal Vision.
     """
 
     def __init__(
@@ -1184,40 +1144,18 @@ class aiGenerationManager:
         self.credential_manager = credential_manager
         self.generation_controller = generation_controller
 
-    def extract_text_from_image(self, file_path: str) -> str:
-        """Extracts text from an image using the OCR API (For Agents)."""
-        logging.info(f"Agent OCR: {file_path}")
-        try:
-            with open(file_path, "rb") as file_handle:
-                response = requests.post(
-                    "https://api.ocr.space/parse/image",
-                    files={"image": ("screenshot.png", file_handle.read())},
-                    data={
-                        "apikey": self.credential_manager.get_api_key("ocr"),
-                        "language": "auto",
-                        "isOverlayRequired": False,
-                        "OCREngine": "2",
-                    },
-                )
-            if response.status_code == 200 and response.json().get("ParsedResults"):
-                return response.json()["ParsedResults"][0].get("ParsedText", "").strip()
-            return ""
-        except Exception as e:
-            logging.error(f"Agent OCR Error: {e}")
-            return ""
-
     def capture_context_for_agent(
         self, agent: Dict[str, Any], model: str
     ) -> Dict[str, Any]:
         """
-        Gathers necessary context (Selection, Screen Vision) for a specific agent.
+        Gathers context (Clipboard, Vision) required by a specific Agent.
         """
         context = {
             "selected_text": self.clipboard_manager.get_selected_text(),
-            "image_text": "",
             "image_data_url": None,
         }
 
+        # Secure Vision Capture (only if model supports it)
         if agent.get("screen_vision"):
             path = self.screen_manager.capture()
             if path:
@@ -1235,12 +1173,10 @@ class aiGenerationManager:
 
     def capture_context_for_general(self) -> Dict[str, Any]:
         """
-        Captures general context: Selection only.
-        (Global Screen Vision default feature removed for performance).
+        Captures general context: User Selection only.
         """
         context = {
             "selected_text": "",
-            "image_text": "",
             "image_data_url": None,
             "screenshot_path": None,
         }
@@ -1262,10 +1198,8 @@ class aiGenerationManager:
 
     def find_triggered_agent(self, text: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """
-        Checks if the transcribed text triggers a predefined Agent.
-
-        Returns:
-            Tuple: (Agent Dictionary, Remaining Instruction Text)
+        Scan transcribed text for Agent trigger phrases.
+        Returns the agent config and the stripped instruction text.
         """
         agents = [
             a
@@ -1284,7 +1218,10 @@ class aiGenerationManager:
     def execute_agent(
         self, agent: Dict[str, Any], instruction: str, full_text: str, duration: float
     ) -> Optional[str]:
-        """Executes the logic for a specific Agent."""
+        """
+        Orchestrates the execution of a custom Agent.
+        Handles prompt construction, context injection, and result pasting.
+        """
         model = agent.get("model", self.app_state.model)
         if model not in self.config_manager.fetch_ai_models():
             raise ValueError(f"Agent model '{model}' unavailable.")
@@ -1313,7 +1250,6 @@ class aiGenerationManager:
         msgs.append({"role": "user", "content": u_content})
 
         mode = "vision" if agent.get("screen_vision") else "text"
-
         autopaste = agent.get("autopaste", True)
 
         response = self.generation_controller.execute_ai_api_call(
@@ -1354,7 +1290,6 @@ You are Ozmoz, a specialized AI agent.
 # DATA
 <user_instruction>User command</user_instruction>
 <selected_text>Selection</selected_text>
-<screen_text>OCR</screen_text>
 """
 
     def build_agent_user_prompt(self, instruction: str, context: Dict[str, Any]) -> str:
@@ -1364,8 +1299,6 @@ You are Ozmoz, a specialized AI agent.
             prompt += (
                 f"<selected_text>\n{context['selected_text']}\n</selected_text>\n\n"
             )
-        if context["image_text"]:
-            prompt += f"<screen_text>\n{context['image_text']}\n</screen_text>\n\n"
         return prompt.strip()
 
     def handle_autopaste(self, result_text: str) -> None:
@@ -1400,18 +1333,14 @@ You are Ozmoz, a specialized AI agent.
         limit = self.context_manager.get_model_context_limit(self.app_state.model)
         base_prompt = self.get_base_prompt() + text_input
 
-        history, image_text, selected_text = (
-            self.context_manager.reduce_context_to_fit_limit(
-                fixed_prompt=base_prompt,
-                history=self.app_state.conversation_history,
-                image_text=context["image_text"],
-                selected_text=context["selected_text"],
-                model_limit=limit,
-            )
+        history, selected_text = self.context_manager.reduce_context_to_fit_limit(
+            fixed_prompt=base_prompt,
+            history=self.app_state.conversation_history,
+            selected_text=context["selected_text"],
+            model_limit=limit,
         )
 
         self.app_state.conversation_history = history
-        context["image_text"] = image_text
         context["selected_text"] = selected_text
 
         system_prompt = self.build_general_system_prompt(context)
@@ -1473,12 +1402,8 @@ You are Ozmoz.
         if context["image_data_url"]:
             context_string += "IMAGE provided.\n"
 
-        if context["selected_text"] and context["image_text"]:
-            context_string += f"Mission: Apply instruction to selection using screen context.\n<sel>\n{context['selected_text']}\n</sel>\n<ocr>\n{context['image_text']}\n</ocr>"
-        elif context["selected_text"]:
+        if context["selected_text"]:
             context_string += f"Mission: Apply instruction to selection.\n<sel>\n{context['selected_text']}\n</sel>"
-        elif context["image_text"]:
-            context_string += "Mission: Analyze screen content."
         else:
             context_string += "Mission: General knowledge."
 
@@ -1486,12 +1411,8 @@ You are Ozmoz.
 
     def generate_ai_text(self) -> None:
         """
-        The main public method for AI Generation.
-        Workflow:
-        1. Validation
-        2. Record Audio
-        3. Parallel(Transcription + Context Capture)
-        4. Detect Agents or Run General Generation.
+        Public Entry Point for AI Generation.
+        Workflow: Validation -> Recording -> Async Context Aggregation -> Generation.
         """
         start_time = time.time()
         logging.info("Start generate_ai_text")
@@ -1548,7 +1469,7 @@ You are Ozmoz.
             transcript = None
             generation_context = None
 
-            # Using ThreadPool to run network (Transcription) and local I/O (Clipboard/Screen) simultaneously
+            # Concurrency: Run Network I/O (Transcription) and Local I/O (Context) in parallel
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
                 logging.debug(
                     "Starting parallel tasks: Transcription & Context Capture"
@@ -1563,7 +1484,7 @@ You are Ozmoz.
 
                 future_context = executor.submit(self.capture_context_for_general)
 
-                # Wait for both to finish
+                # Barrier: Wait for both
                 transcript = future_transcription.result()
                 generation_context = future_context.result()
 
@@ -1593,7 +1514,7 @@ You are Ozmoz.
             agent, instruction = self.find_triggered_agent(transcript)
             if agent:
                 try:
-                    # Clean up general screenshot if agent doesn't need it or needs a fresh one
+                    # Cleanup: If agent doesn't use vision, delete pre-captured screenshot
                     if not agent.get("screen_vision") and generation_context.get(
                         "screenshot_path"
                     ):
