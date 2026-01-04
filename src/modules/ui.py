@@ -276,7 +276,7 @@ class UIResourceLoader:
             try:
                 # Map HTML IDs to AppState booleans for checkbox pre-checking
                 toggles_map: Dict[str, bool] = {
-                    "toggle": app_state.sound_enabled,
+                    "toggle-sound": app_state.sound_enabled,
                     "toggle-mute": app_state.mute_sound,
                     "toggle-chart-type": app_state.chart_type == "line",
                     "dashboard-period-toggle": app_state.dashboard_period == 7,
