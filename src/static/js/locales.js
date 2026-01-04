@@ -106,6 +106,7 @@ window.locales = {
     api_title_ai: "Génération IA",
     api_desc_ai:
       "Intelligence artificielle (LLM). Entrer les clés pour utiliser les modèles spécifiques.",
+    api_separator: "ET / OU",
     btn_save_keys: "Sauvegarder les clés",
 
     // History
@@ -320,6 +321,7 @@ window.locales = {
     api_title_ai: "AI Generation",
     api_desc_ai:
       "Artificial Intelligence (LLM). Enter keys to use specific models.",
+    api_separator: "AND / OR",
     btn_save_keys: "Save Keys",
 
     // History
@@ -531,6 +533,7 @@ window.locales = {
     api_title_ai: "Generación IA",
     api_desc_ai:
       "Inteligencia Artificial (LLM). Ingrese las claves para usar modelos específicos.",
+    api_separator: "Y / O",
     btn_save_keys: "Guardar Claves",
 
     // History

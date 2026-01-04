@@ -16,12 +16,6 @@
   <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">
     <img src="https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-green?style=for-the-badge" alt="License">
   </a>
-  <a href="docs/docs.md">
-    <img src="https://img.shields.io/badge/Docs-Read%20Documentation-blueviolet?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Read Documentation">
-  </a>
-  <a href="https://www.instagram.com/ozmoz.ai/" target="_blank">
-    <img src="https://img.shields.io/badge/Instagram-Follow%20Us-E4405F?style=for-the-badge&logo=instagram&logoColor=white" alt="Follow on Instagram">
-  </a>
 </p>
 
 <br>
@@ -30,6 +24,9 @@
 <a href="https://github.com/zerep-thomas/ozmoz/releases/latest">
   <img src="https://img.shields.io/github/v/release/zerep-thomas/ozmoz?style=for-the-badge&label=DOWNLOAD&logo=windows&logoColor=white" alt="Download Ozmoz">
 </a>
+  <a href="docs/docs.md">
+    <img src="https://img.shields.io/badge/Docs-Read%20Documentation-blueviolet?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Read Documentation">
+  </a>
 
 </div>
 
@@ -50,6 +47,8 @@
   - **Local Mode:** Uses _Whisper V3 Turbo_ running on your device (Offline, Privacy-focused). Optimized for NVIDIA GPUs (CUDA) with CPU fallback.
   - **Cloud Mode:** Uses _Groq/Whisper_ or _Deepgram Nova-2_ for ultra-low latency.
 - **🧠 Contextual AI:** Select text in any application, press a keyboard shortcut, and Ozmoz analyzes it using the latest LLMs.
+- **🔒 Secure & Private:** Your local chat history and data are automatically encrypted at rest.
+
 - **👁️ Screen Vision:** Allows AI to “see” your active window to explain code, analyze data, or summarize (multimodal).
 - **🌐 Live Web Search:** Performs real-time internet searches to provide up-to-date answers with citations.
 - **🤖 Custom Agents:** Create specialized characters triggered by voice keywords (e.g., “Hey Dev” to switch to a coding assistant).

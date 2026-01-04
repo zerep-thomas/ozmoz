@@ -14,7 +14,7 @@ os.environ["QT_LOGGING_RULES"] = "qt.qpa.window=false"
 
 
 class AppConfig:
-    VERSION: str = "1.1.2"
+    VERSION: str = "1.1.3"
     MUTEX_ID: str = "{f7c9acc6-46a7-4712-89f5-171549439308}-Ozmoz"
 
     GITHUB_RELEASES_URL: str = (
