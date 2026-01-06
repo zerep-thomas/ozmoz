@@ -44,38 +44,82 @@ window.openHotkeyModal = (buttonElement) => {
 
 /**
  * Event handler for keydown events during recording.
- * construct the hotkey string (e.g., "ctrl+alt+k").
+ * construct the hotkey string (e.g., "ctrl+alt+down").
  * @param {KeyboardEvent} event
  */
 window.handleHotkeyCapture = (event) => {
   if (!isCapturingHotkey) return;
   event.preventDefault();
+  event.stopPropagation();
 
-  // Cancel if Escape is pressed
   if (event.key === "Escape") {
     window.cancelHotkeyCapture();
     return;
   }
 
   const parts = [];
+
   if (event.ctrlKey) parts.push("ctrl");
-  if (event.altKey) parts.push("alt");
+  if (event.metaKey) parts.push("cmd");
+  if (event.getModifierState("AltGraph")) {
+    parts.push("altgr");
+  } else if (event.altKey) {
+    parts.push("alt");
+  }
   if (event.shiftKey) parts.push("shift");
 
-  let keyName = event.key.toLowerCase();
-  if (keyName === " ") keyName = "space";
+  const keyLocation = event.location;
+  let keyName = event.key;
+  let code = event.code;
 
-  // Add the main key if it's not a modifier
-  if (
-    !["control", "alt", "shift", "meta"].includes(keyName) &&
-    !parts.includes(keyName)
-  ) {
-    parts.push(keyName);
+  const modifiers = ["Control", "Alt", "Shift", "Meta", "AltGraph"];
+
+  if (!modifiers.includes(keyName)) {
+    const specialKeys = {
+      ArrowDown: "down",
+      ArrowUp: "up",
+      ArrowLeft: "left",
+      ArrowRight: "right",
+      Enter: "enter",
+      Backspace: "backspace",
+      Tab: "tab",
+      Space: "space",
+      " ": "space",
+      Escape: "esc",
+      Delete: "delete",
+      Insert: "insert",
+      Home: "home",
+      End: "end",
+      PageUp: "pageup",
+      PageDown: "pagedown",
+      Pause: "pause",
+      PrintScreen: "print_screen",
+      ScrollLock: "scroll_lock",
+      CapsLock: "caps_lock",
+      NumLock: "num_lock",
+    };
+
+    if (/^F\d+$/.test(keyName)) {
+      parts.push(keyName.toLowerCase());
+    } else if (specialKeys[keyName]) {
+      parts.push(specialKeys[keyName]);
+    } else {
+      if (keyName.length === 1) {
+        parts.push(keyName.toLowerCase());
+      } else if (code.startsWith("Numpad")) {
+        parts.push(code.toLowerCase());
+      } else {
+        parts.push(keyName.toLowerCase());
+      }
+    }
   }
 
+  // Suppression des doublons (au cas où) et assemblage
+  const uniqueParts = [...new Set(parts)];
+
   // Update UI if we have a valid combination
-  if (parts.length > 0) {
-    capturedHotkey = parts.join("+");
+  if (uniqueParts.length > 0) {
+    capturedHotkey = uniqueParts.join("+");
     document.getElementById("captured-hotkey-display").textContent =
       capturedHotkey;
     document.getElementById("hotkey-modal-save-btn").disabled = false;

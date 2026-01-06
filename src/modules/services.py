@@ -632,7 +632,7 @@ class GenerationController:
                     full_result += remainder
 
         if show_streaming:
-            self.window.evaluate_js(f"appendaiStreamChunk({json.dumps('\n<br>')})")
+            self.window.evaluate_js(f"appendaiStreamChunk({json.dumps('\n')})")
 
         return full_result
 

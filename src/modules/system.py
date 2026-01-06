@@ -123,23 +123,67 @@ class HotkeyManager:
     def _convert_to_pynput_format(self, combo_str: str) -> str:
         """
         Normalizes hotkey strings to pynput compatible format.
-        Example: 'ctrl+alt+x' -> '<ctrl>+<alt>+x'
+        Handles modifiers, special keys (arrows, F-keys), and AltGr.
+        Example: 'ctrl+alt+down' -> '<ctrl>+<alt>+<down>'
         """
         if not combo_str:
             return ""
+
         parts = combo_str.lower().split("+")
         formatted_parts = []
+
+        special_keys_map = {
+            # Modifiers
+            "ctrl": "<ctrl>",
+            "control": "<ctrl>",
+            "alt": "<alt>",
+            "altgr": "<alt_gr>",
+            "shift": "<shift>",
+            "cmd": "<cmd>",
+            "win": "<cmd>",
+            "meta": "<cmd>",
+            # Arrows & Navigation
+            "up": "<up>",
+            "down": "<down>",
+            "left": "<left>",
+            "right": "<right>",
+            "pageup": "<page_up>",
+            "pagedown": "<page_down>",
+            "home": "<home>",
+            "end": "<end>",
+            "insert": "<insert>",
+            "delete": "<delete>",
+            "backspace": "<backspace>",
+            "enter": "<enter>",
+            "tab": "<tab>",
+            "space": "<space>",
+            "esc": "<esc>",
+            # Locks & System
+            "caps_lock": "<caps_lock>",
+            "num_lock": "<num_lock>",
+            "print_screen": "<print_screen>",
+            "scroll_lock": "<scroll_lock>",
+            "pause": "<pause>",
+        }
+
         for part in parts:
-            if part in ["ctrl", "control"]:
-                formatted_parts.append("<ctrl>")
-            elif part in ["alt"]:
-                formatted_parts.append("<alt>")
-            elif part in ["shift"]:
-                formatted_parts.append("<shift>")
-            elif part in ["cmd", "win"]:
-                formatted_parts.append("<cmd>")
+            part = part.strip()
+
+            if part in special_keys_map:
+                formatted_parts.append(special_keys_map[part])
+
+            elif part.startswith("f") and part[1:].isdigit():
+                formatted_parts.append(f"<{part}>")
+
+            elif part.startswith("numpad"):
+                if len(part) == 7 and part[-1].isdigit():
+                    formatted_parts.append(part[-1])
+                else:
+                    formatted_parts.append(part)
+
             else:
                 formatted_parts.append(part)
+
         return "+".join(formatted_parts)
 
     def _execute_safely(
