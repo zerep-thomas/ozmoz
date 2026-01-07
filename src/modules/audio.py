@@ -1,3 +1,13 @@
+"""
+Audio Management Module for Ozmoz.
+
+This module handles:
+- Audio Recording: Capturing microphone input via PyAudio.
+- Transcription Services: Orchestrating API calls to Groq/Deepgram and local Whisper inference.
+- Audio Preprocessing: Volume normalization and format conversion.
+- Text Post-processing: Converting numbers (text to digits) and applying user replacements.
+"""
+
 import io
 import logging
 import os
@@ -10,6 +20,7 @@ import time
 import wave
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+# --- Third-Party Imports ---
 import keyboard
 import numpy as np
 import pyaudio
@@ -17,6 +28,7 @@ import pyperclip
 import win32con
 import win32gui
 
+# --- Patch subprocess for Windows (Hide Console Window) ---
 if sys.platform == "win32":
     _original_popen = subprocess.Popen
 
@@ -29,17 +41,18 @@ if sys.platform == "win32":
                 kwargs["startupinfo"] = startupinfo
 
             if "creationflags" not in kwargs:
+                # CREATE_NO_WINDOW
                 kwargs["creationflags"] = 0x08000000
 
             super().__init__(*args, **kwargs)
 
     subprocess.Popen = _PatchedPopen
 
-
 from deepgram import DeepgramClient, FileSource, PrerecordedOptions
 from groq import Groq
 from text_to_num.transforms import alpha2digit
 
+# --- Local Imports ---
 from modules.config import AppConfig, AppState
 from modules.data import (
     CredentialManager,
@@ -50,6 +63,8 @@ from modules.data import (
 from modules.local_audio import local_whisper
 from modules.utils import SoundManager, SuppressStderr
 
+# --- Constants ---
+# Regex patterns for number conversion pre-processing
 WORDS_FR = "et|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt|trente|quarante|cinquante|soixante|cent|cents|mille|milles"
 PATTERN_FR = re.compile(
     r"\b((?:{0})(?:-(?:{0}))+)\b".format(WORDS_FR), flags=re.IGNORECASE
@@ -62,9 +77,21 @@ PATTERN_EN = re.compile(
 
 
 class AudioManager:
+    """
+    Manages audio input, recording streams, and system volume control.
+    """
+
     def __init__(
         self, app_state: AppState, sound_manager: SoundManager, os_interface: Any
     ) -> None:
+        """
+        Initialize the AudioManager.
+
+        Args:
+            app_state (AppState): Global application state.
+            sound_manager (SoundManager): Manager for UI sound effects.
+            os_interface (Any): Adapter for OS-specific audio control (PyCaw).
+        """
         self.app_state = app_state
         self.sound_manager = sound_manager
         self.os_interface = os_interface
@@ -75,9 +102,16 @@ class AudioManager:
         self._silence_callback: Optional[Callable[[], None]] = None
 
     def warmup(self) -> None:
+        """Placeholder for potential audio hardware warmup routines."""
         pass
 
     def initialize(self) -> bool:
+        """
+        Initializes the PyAudio instance.
+
+        Returns:
+            bool: True if initialization was successful, False otherwise.
+        """
         if self._pyaudio_instance:
             return True
         logging.info("Initializing PyAudio...")
@@ -86,11 +120,14 @@ class AudioManager:
                 self._pyaudio_instance = pyaudio.PyAudio()
             self.app_state.pyaudio_instance = self._pyaudio_instance
             return True
-        except Exception as e:
-            logging.critical(f"PyAudio init failed: {e}")
+        except Exception as error:
+            logging.critical(f"PyAudio initialization failed: {error}")
             return False
 
     def terminate(self) -> None:
+        """
+        Closes audio streams and terminates the PyAudio instance.
+        """
         logging.info("Stopping audio services...")
         if self._audio_stream:
             try:
@@ -101,6 +138,7 @@ class AudioManager:
                 pass
             finally:
                 self._audio_stream = None
+
         if self._pyaudio_instance:
             try:
                 self._pyaudio_instance.terminate()
@@ -112,14 +150,21 @@ class AudioManager:
     def start_recording(
         self, on_silence_callback: Optional[Callable[[], None]] = None
     ) -> None:
+        """
+        Starts the recording process.
+
+        Args:
+            on_silence_callback (Optional[Callable]): Callback triggered when VAD detects silence.
+        """
         if not self.app_state.pyaudio_instance and not self.initialize():
             return
+
         self.app_state.is_busy = True
         self.app_state.is_recording = True
         self.app_state.recording_start_time = time.time()
-
         self._silence_callback = on_silence_callback
 
+        # Update UI state
         if self.app_state.window:
             try:
                 self.app_state.window.evaluate_js("setSettingsButtonState(true)")
@@ -129,6 +174,7 @@ class AudioManager:
             except Exception:
                 pass
 
+        # Play sound and handle mute logic in background to avoid blocking
         threading.Thread(
             target=self._play_sound_and_mute_in_background, daemon=True
         ).start()
@@ -137,7 +183,6 @@ class AudioManager:
 
         unique_filename = f"ozmoz_rec_{uuid.uuid4().hex}.wav"
         temp_path = os.path.join(tempfile.gettempdir(), unique_filename)
-
         self.app_state.current_recording_path = temp_path
 
         threading.Thread(
@@ -145,21 +190,31 @@ class AudioManager:
         ).start()
 
     def stop_recording(self) -> None:
+        """Stops the recording and restores system volume."""
         if self.app_state.is_recording:
             self.app_state.is_recording = False
             self.unmute_system_volume()
 
     def _play_sound_and_mute_in_background(self) -> None:
+        """Plays the start-recording sound and mutes system audio if configured."""
         if self.app_state.sound_enabled:
             try:
                 self.sound_manager.play("beep_on")
             except Exception:
                 pass
+
         self.app_state.was_muted_during_recording = self.app_state.mute_sound
         if self.app_state.mute_sound:
             self.mute_system_volume()
 
     def _record_audio_worker(self, filename: str) -> None:
+        """
+        Background worker that captures audio frames and saves them to a WAV file.
+        Also drives the visualizer data to the frontend.
+
+        Args:
+            filename (str): Path to save the recorded audio.
+        """
         frames: List[bytes] = []
         stream = None
 
@@ -191,6 +246,7 @@ class AudioManager:
                     )
                     frames.append(data)
 
+                    # Update Visualizer UI
                     if viz_enabled and window:
                         try:
                             audio_array = np.frombuffer(data, dtype=np.int16)
@@ -239,10 +295,11 @@ class AudioManager:
                         wave_file.setframerate(AppConfig.AUDIO_RATE)
                         wave_file.writeframes(b"".join(frames))
                     logging.info(f"Audio saved: {filename}")
-                except Exception as e:
-                    logging.critical(f"WAV write error: {e}")
+                except Exception as error:
+                    logging.critical(f"WAV write error: {error}")
 
     def mute_system_volume(self) -> None:
+        """Mutes the system volume using the OS interface."""
         if not self.app_state.mute_sound or self._is_system_muted_by_app:
             return
         try:
@@ -252,6 +309,7 @@ class AudioManager:
             self._is_system_muted_by_app = False
 
     def unmute_system_volume(self) -> None:
+        """Unmutes the system volume using the OS interface."""
         if not self._is_system_muted_by_app:
             return
         try:
@@ -263,23 +321,41 @@ class AudioManager:
 
 
 class TranscriptionService:
+    """
+    Service responsible for converting audio files to text.
+    Supports Local Whisper, Groq (Whisper via API), and Deepgram (Nova).
+    """
+
     def __init__(
         self,
         app_state: AppState,
         replacement_manager: ReplacementManager,
         credential_manager: CredentialManager,
     ) -> None:
+        """
+        Initialize the TranscriptionService.
+
+        Args:
+            app_state (AppState): Global application state.
+            replacement_manager (ReplacementManager): Handles text replacement logic.
+            credential_manager (CredentialManager): Provides API keys.
+        """
         self.app_state = app_state
         self.replacement_manager = replacement_manager
         self.credential_manager = credential_manager
 
     def warmup(self) -> None:
-        def _warmup_worker():
+        """
+        Pre-initializes clients and models to reduce latency on first use.
+        """
+
+        def _warmup_worker() -> None:
             try:
                 # Force load text-to-num library
                 alpha2digit("vingt-deux", lang="fr")
                 logging.info("Transcription Service: Text-to-num engine warmed up.")
 
+                # Warmup Groq Client
                 groq_api_key = self.credential_manager.get_api_key(
                     "groq_audio"
                 ) or self.credential_manager.get_api_key("ai")
@@ -287,12 +363,13 @@ class TranscriptionService:
                     self.app_state.groq_client = Groq(api_key=groq_api_key)
                     logging.info("Transcription Service: Groq client warmed up.")
 
+                # Warmup Deepgram Client
                 deepgram_api_key = self.credential_manager.get_api_key("deepgram")
                 if deepgram_api_key and self.app_state.deepgram_client is None:
                     self.app_state.deepgram_client = DeepgramClient(deepgram_api_key)
                     logging.info("Transcription Service: Deepgram client warmed up.")
 
-                # Using startswith("local") handles "local-turbo", "local-whisper", etc.
+                # Warmup Local Whisper if selected
                 if self.app_state.audio_model.startswith("local"):
                     if local_whisper.is_installed():
                         local_whisper.load()
@@ -302,6 +379,7 @@ class TranscriptionService:
         threading.Thread(target=_warmup_worker, daemon=True).start()
 
     def apply_replacements(self, text: str) -> str:
+        """Applies user-defined text replacements."""
         if not text:
             return ""
         try:
@@ -314,6 +392,7 @@ class TranscriptionService:
             return text
 
     def convert_numbers(self, transcript: str, language: str) -> str:
+        """Converts written numbers (e.g., 'twenty-two') to digits ('22')."""
         if not transcript:
             return ""
         try:
@@ -330,6 +409,7 @@ class TranscriptionService:
             return transcript
 
     def _init_timing(self) -> Tuple[Dict[str, Any], float, Callable[[str, str], None]]:
+        """Helpers for performance profiling."""
         tracker: Dict[str, Any] = {}
         start_time = time.perf_counter()
         step_start = start_time
@@ -344,6 +424,7 @@ class TranscriptionService:
         return tracker, start_time, log_step
 
     def _optimize_audio_in_memory(self, original_path: str) -> Union[str, io.BytesIO]:
+        """Loads audio file into memory to speed up API uploads."""
         try:
             with open(original_path, "rb") as f:
                 file_data = f.read()
@@ -356,6 +437,7 @@ class TranscriptionService:
             return original_path
 
     def _transcribe_ai(self, filename: str, lang: str, log_step: Callable) -> str:
+        """Handles transcription via Groq API (Whisper models)."""
         try:
             if self.app_state.groq_client is None:
                 api_key = self.credential_manager.get_api_key(
@@ -391,6 +473,7 @@ class TranscriptionService:
             return "Error: Transcription failed."
 
     def _transcribe_deepgram(self, filename: str, lang: str, log_step: Callable) -> str:
+        """Handles transcription via Deepgram API (Nova models)."""
         try:
             if self.app_state.deepgram_client is None:
                 api_key = self.credential_manager.get_api_key("deepgram")
@@ -431,6 +514,17 @@ class TranscriptionService:
             return "Error: Deepgram failed."
 
     def transcribe(self, filename: str, lang: str, duration: float) -> str:
+        """
+        Main transcription entry point. Routes to the correct provider.
+
+        Args:
+            filename (str): Path to audio file.
+            lang (str): Language code.
+            duration (float): Audio duration in seconds (for logging).
+
+        Returns:
+            str: Transcribed text or error message.
+        """
         tracker, start_time, log_step = self._init_timing()
         log_step("00_start", f"File: {os.path.basename(filename)}")
 
@@ -458,6 +552,7 @@ class TranscriptionService:
             if transcript.startswith("Error"):
                 return transcript
 
+            # Post-processing
             if lang in {"fr", "en", "es", "pt", "de", "ru"}:
                 transcript = self.convert_numbers(transcript, lang)
             log_step("21_numbers", "Numbers converted")
@@ -476,6 +571,11 @@ class TranscriptionService:
 
 
 class TranscriptionManager:
+    """
+    Orchestrates the end-to-end transcription flow:
+    Stop Recording -> Wait for File -> Transcribe -> Paste to Clipboard -> Clean up.
+    """
+
     def __init__(
         self,
         app_state: AppState,
@@ -486,6 +586,7 @@ class TranscriptionManager:
         transcription_service: TranscriptionService,
         event_bus: Any,
     ) -> None:
+        """Initialize the TranscriptionManager."""
         self.app_state = app_state
         self.audio_manager = audio_manager
         self.sound_manager = sound_manager
@@ -497,6 +598,7 @@ class TranscriptionManager:
         self.audio_file = os.path.join(self.temp_dir, AppConfig.AUDIO_OUTPUT_FILENAME)
 
     def _restore_clipboard_worker(self, content: str) -> None:
+        """Restores the original clipboard content after pasting."""
         for _ in range(5):
             try:
                 pyperclip.copy(content)
@@ -507,6 +609,7 @@ class TranscriptionManager:
             time.sleep(0.2)
 
     def _wait_for_file(self, filepath: str) -> bool:
+        """Waits for the audio file to be fully written to disk."""
         start = time.time()
         while time.time() - start < 2.0:
             if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
@@ -517,6 +620,12 @@ class TranscriptionManager:
     def stop_recording_and_transcribe(
         self, timing_tracker: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
+        """
+        Stops recording, transcribes audio, and pastes the result.
+
+        Returns:
+            Dict: Timing metrics for the operation.
+        """
         start_time = time.perf_counter()
         local_clipboard = ""
 
@@ -552,6 +661,7 @@ class TranscriptionManager:
             except Exception:
                 pass
 
+        # Hide window to reveal previous application context
         try:
             hwnd = win32gui.FindWindow(None, "Ozmoz")
             if hwnd and win32gui.IsWindowVisible(hwnd):
@@ -560,6 +670,7 @@ class TranscriptionManager:
         except Exception:
             pass
 
+        # Backup clipboard
         try:
             local_clipboard = pyperclip.paste()
         except Exception:
@@ -581,12 +692,12 @@ class TranscriptionManager:
                 current_audio_file, self.app_state.language, rec_duration
             )
 
+            # Handle Local Model Missing Error
             if transcribed_text == "Error: Local model not found":
                 pyperclip.copy("⚠️ Modèle local manquant. Voir Paramètres.")
 
                 if self.app_state.settings_window:
                     self.app_state.settings_window.show()
-
                     script = """
                         window.dispatchEvent(new CustomEvent('pywebview', { detail: 'show_settings' }));
                         setTimeout(() => {
@@ -596,7 +707,6 @@ class TranscriptionManager:
                         }, 500);
                     """
                     self.app_state.settings_window.evaluate_js(script)
-
                 return timing_tracker
 
             if not transcribed_text or transcribed_text.startswith("Error"):
@@ -604,6 +714,7 @@ class TranscriptionManager:
             else:
                 pyperclip.copy(transcribed_text)
 
+            # Simulate Paste
             keyboard.press_and_release("ctrl+v")
             time.sleep(0.25)
             threading.Thread(
@@ -612,6 +723,7 @@ class TranscriptionManager:
                 daemon=True,
             ).start()
 
+            # Update Stats & History in background
             def update_stats():
                 try:
                     if transcribed_text:
@@ -649,6 +761,7 @@ class TranscriptionManager:
             self.app_state.is_busy = False
             self.app_state.recording_start_time = 0.0
 
+            # Cleanup
             try:
                 if current_audio_file and os.path.exists(current_audio_file):
                     threading.Thread(

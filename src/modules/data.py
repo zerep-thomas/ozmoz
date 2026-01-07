@@ -1,3 +1,14 @@
+"""
+Data Management Module for Ozmoz.
+
+This module handles persistent storage and retrieval of application data, including:
+- Credential Management (API Keys via System Keyring).
+- Configuration Management (Settings JSON).
+- Data Persistence (History with Encryption, Agents, Replacements).
+- Statistics Tracking (Activity logging).
+- Update Checking (GitHub API).
+"""
+
 import json
 import logging
 import os
@@ -6,15 +17,16 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+# --- Third-Party Imports ---
 import keyring
 import requests
 from cryptography.fernet import Fernet
 
-# Internal imports
+# --- Local Imports ---
 from modules.config import AppConfig, AppState, app_state
 from modules.utils import PathManager
 
-# Constants for file paths
+# --- Constants ---
 SETTINGS_FILE: Path = PathManager.get_user_data_path("data/settings.json")
 HISTORY_FILE: Path = PathManager.get_user_data_path("data/history.json")
 REPLACEMENTS_FILE: Path = PathManager.get_user_data_path("data/replacements.json")
@@ -24,8 +36,8 @@ AGENTS_FILE: Path = PathManager.get_user_data_path("data/agents.json")
 
 class CredentialManager:
     """
-    Manages API keys via the native OS vault.
-    Now also manages the Encryption Key for local data.
+    Manages sensitive credentials using the operating system's native keyring service.
+    Also manages the local symmetric encryption key for securing history data.
     """
 
     SERVICE_NAME: str = "OzmozApp"
@@ -38,32 +50,42 @@ class CredentialManager:
     ]
 
     def __init__(self) -> None:
-        self._cache: Dict[str, str] = {}
+        """Initialize the manager and load existing keys into memory cache."""
+        self._credential_cache: Dict[str, str] = {}
         self._load_from_os_store()
 
     def _load_from_os_store(self) -> None:
+        """Loads known keys from the system keyring into the internal cache."""
         for key_name in self.KNOWN_KEYS:
             try:
                 secret: Optional[str] = keyring.get_password(
                     self.SERVICE_NAME, key_name
                 )
                 if secret:
-                    self._cache[key_name] = secret
+                    self._credential_cache[key_name] = secret
             except Exception as error:
-                logging.error(f"Error loading Keyring ({key_name}): {error}")
+                logging.error(f"Error loading credential '{key_name}': {error}")
 
     def get_encryption_key(self) -> bytes:
         """
         Retrieves or generates the symmetric encryption key (Fernet).
+
+        Returns:
+            bytes: The encryption key.
         """
-        key = self._cache.get("local_encryption_key")
+        key = self._credential_cache.get("local_encryption_key")
 
         if not key:
             logging.info("Generating new local encryption key...")
             new_key = Fernet.generate_key().decode("utf-8")
-            keyring.set_password(self.SERVICE_NAME, "local_encryption_key", new_key)
-            self._cache["local_encryption_key"] = new_key
-            key = new_key
+            try:
+                keyring.set_password(self.SERVICE_NAME, "local_encryption_key", new_key)
+                self._credential_cache["local_encryption_key"] = new_key
+                key = new_key
+            except Exception as error:
+                logging.critical(f"Failed to save encryption key: {error}")
+                # Fallback to ephemeral key if keyring fails (Data won't persist across restarts)
+                return Fernet.generate_key()
 
         return key.encode("utf-8")
 
@@ -72,20 +94,19 @@ class CredentialManager:
         Saves a dictionary of API keys to the OS vault and updates the cache.
 
         Args:
-            keys_dict: A dictionary where keys are service names (e.g., 'groq_audio')
-                       and values are the API keys.
+            keys_dict (Dict[str, str]): Map of service names to API keys.
 
         Returns:
             bool: True if saving was successful, False otherwise.
         """
         try:
             for key_name, key_value in keys_dict.items():
-                val_stripped: str = key_value.strip() if key_value else ""
+                sanitized_value: str = key_value.strip() if key_value else ""
 
-                if val_stripped:
+                if sanitized_value:
                     # Update or add key
-                    keyring.set_password(self.SERVICE_NAME, key_name, val_stripped)
-                    self._cache[key_name] = val_stripped
+                    keyring.set_password(self.SERVICE_NAME, key_name, sanitized_value)
+                    self._credential_cache[key_name] = sanitized_value
                 else:
                     # Remove key if value is empty
                     try:
@@ -95,24 +116,28 @@ class CredentialManager:
                         if current_val:
                             keyring.delete_password(self.SERVICE_NAME, key_name)
                     except Exception:
-                        pass  # Ignore errors during deletion
+                        pass  # Ignore errors during deletion if key doesn't exist
 
-                    if key_name in self._cache:
-                        del self._cache[key_name]
+                    if key_name in self._credential_cache:
+                        del self._credential_cache[key_name]
 
-            logging.info("API keys saved to OS vault.")
+            logging.info("API keys successfully saved to OS vault.")
             return True
         except Exception as error:
-            logging.error(f"Error saving Keyring: {error}")
+            logging.error(f"Error saving credentials: {error}")
             return False
 
     def get_api_key(self, service_alias: str) -> Optional[str]:
         """
         Retrieves an API key based on a specific service alias or a generic category.
 
+        Priority:
+        1. System Keyring (Cached)
+        2. Environment Variables
+
         Args:
-            service_alias: The specific service ('deepgram', 'cerebras')
-                           or category ('ai', 'audio_transcription').
+            service_alias (str): The specific service ('deepgram', 'cerebras')
+                                 or category ('ai', 'audio_transcription').
 
         Returns:
             Optional[str]: The API key if found, otherwise None.
@@ -121,50 +146,60 @@ class CredentialManager:
 
         # 1. Routing logic for generic categories
         if service_alias == "ai":
-            # Priority for text generation: Groq AI > Cerebras > Environment Variables
-            api_key = self._cache.get("groq_ai") or self._cache.get("cerebras")
+            # Priority for text generation: Groq AI > Cerebras > Env Vars
+            api_key = self._credential_cache.get(
+                "groq_ai"
+            ) or self._credential_cache.get("cerebras")
             if not api_key:
                 api_key = os.getenv("GROQ_API_KEY") or os.getenv("AI_API_KEY")
 
         elif service_alias == "audio_transcription":
             # Priority for audio: Groq Audio > Deepgram
-            api_key = self._cache.get("groq_audio") or self._cache.get("deepgram")
+            api_key = self._credential_cache.get(
+                "groq_audio"
+            ) or self._credential_cache.get("deepgram")
 
         # 2. Direct access by specific service name
         else:
-            api_key = self._cache.get(service_alias)
+            api_key = self._credential_cache.get(service_alias)
             # Fallback to Environment Variables
             if not api_key:
                 if service_alias == "deepgram":
                     api_key = os.getenv("DEEPGRAM_API_KEY")
-                if service_alias == "groq_audio":
+                elif service_alias == "groq_audio":
                     api_key = os.getenv("GROQ_API_KEY")
-                if service_alias == "groq_ai":
+                elif service_alias == "groq_ai":
                     api_key = os.getenv("GROQ_API_KEY")
 
         return api_key
 
     def get_all_keys_status(self) -> Dict[str, bool]:
         """
-        Returns the presence status of keys for the UI (true/false),
-        never exposing the actual keys here.
+        Returns the presence status of keys for the UI (true/false).
+        Does NOT expose the actual keys.
+
+        Returns:
+            Dict[str, bool]: Status map.
         """
         return {
-            "groq_audio": bool(self._cache.get("groq_audio")),
-            "deepgram": bool(self._cache.get("deepgram")),
-            "groq_ai": bool(self._cache.get("groq_ai")),
-            "cerebras": bool(self._cache.get("cerebras")),
+            "groq_audio": bool(self._credential_cache.get("groq_audio")),
+            "deepgram": bool(self._credential_cache.get("deepgram")),
+            "groq_ai": bool(self._credential_cache.get("groq_ai")),
+            "cerebras": bool(self._credential_cache.get("cerebras")),
         }
 
     def get_raw_keys_for_ui(self) -> Dict[str, str]:
         """
         Returns the actual keys for display in the settings input fields.
+
+        Returns:
+            Dict[str, str]: Map of HTML input IDs to key values.
         """
         return {
-            "api-key-groq-audio": self._cache.get("groq_audio", ""),
-            "api-key-deepgram": self._cache.get("deepgram", ""),
-            "api-key-groq-ai": self._cache.get("groq_ai", ""),
-            "api-key-cerebras": self._cache.get("cerebras", ""),
+            "api-key-groq-audio": self._credential_cache.get("groq_audio", ""),
+            "api-key-deepgram": self._credential_cache.get("deepgram", ""),
+            "api-key-groq-ai": self._credential_cache.get("groq_ai", ""),
+            "api-key-cerebras": self._credential_cache.get("cerebras", ""),
         }
 
 
@@ -172,38 +207,42 @@ class CredentialManager:
 
 
 class UpdateManager:
-    """Manages version checking via GitHub API."""
+    """Manages application version checking via GitHub API."""
 
     @staticmethod
-    def _compare_versions(version1: str, version2: str) -> int:
+    def _compare_versions(version_a: str, version_b: str) -> int:
         """
         Compares two semantic version strings.
 
+        Args:
+            version_a (str): First version string (e.g., "1.0.0").
+            version_b (str): Second version string.
+
         Returns:
-             1 if version1 > version2
-            -1 if version1 < version2
+             1 if version_a > version_b
+            -1 if version_a < version_b
              0 if equal
         """
         try:
-            parts1 = [int(p) for p in version1.split(".")]
-            parts2 = [int(p) for p in version2.split(".")]
+            parts_a = [int(p) for p in version_a.split(".")]
+            parts_b = [int(p) for p in version_b.split(".")]
         except (ValueError, AttributeError):
             return 0
 
         # Normalize length by padding with zeros
-        max_length = max(len(parts1), len(parts2))
-        parts1.extend([0] * (max_length - len(parts1)))
-        parts2.extend([0] * (max_length - len(parts2)))
+        max_length = max(len(parts_a), len(parts_b))
+        parts_a.extend([0] * (max_length - len(parts_a)))
+        parts_b.extend([0] * (max_length - len(parts_b)))
 
         for i in range(max_length):
-            if parts1[i] > parts2[i]:
+            if parts_a[i] > parts_b[i]:
                 return 1
-            if parts1[i] < parts2[i]:
+            if parts_a[i] < parts_b[i]:
                 return -1
         return 0
 
     def fetch_remote_version_info(self) -> None:
-        """Fetches the latest version info from GitHub Releases."""
+        """Fetches the latest version info from GitHub Releases and caches it in app_state."""
         if app_state.remote_version is not None:
             return
 
@@ -242,26 +281,32 @@ class UpdateManager:
 
     def check_for_updates(self) -> Tuple[bool, Optional[str], Optional[str]]:
         """
-        Checks if a newer version is available.
+        Checks if a newer version is available compared to the current AppConfig.VERSION.
 
         Returns:
             Tuple containing: (update_available: bool, new_version: str, update_url: str)
         """
         self.fetch_remote_version_info()
-        if not app_state.remote_version:
+
+        current_version = AppConfig.VERSION
+        remote_version = app_state.remote_version
+
+        if not remote_version:
             return False, None, None
 
-        if self._compare_versions(app_state.remote_version, AppConfig.VERSION) == 1:
-            return True, app_state.remote_version, app_state.remote_update_url
+        if self._compare_versions(remote_version, current_version) == 1:
+            return True, remote_version, app_state.remote_update_url
+
         return False, None, None
 
 
 class ConfigManager:
     """
     Manages application settings (loading/saving JSON) and
-    retrieves available AI models from LOCAL configuration.
+    retrieves available AI models from the local configuration file.
     """
 
+    # Mapping JSON keys to AppState attributes
     MODEL_LIST_KEYS: Dict[str, str] = {
         "advanced_models": "advanced_model_list",
         "tool_models": "tool_model_list",
@@ -277,7 +322,10 @@ class ConfigManager:
         self.credential_manager = manager
 
     def load_and_parse_remote_config(self) -> None:
-        """Loads configuration from the local JSON file instead of remote."""
+        """
+        Loads configuration from the local 'models.json' file.
+        This file defines available models and their capabilities.
+        """
         if app_state.cached_remote_config:
             return
 
@@ -301,7 +349,7 @@ class ConfigManager:
                 logging.info("Local models configuration loaded successfully.")
             else:
                 logging.error(f"Configuration file not found: {config_path}")
-                # Use empty fallback
+                # Use empty fallback to prevent crashes
                 app_state.cached_remote_config = []
 
         except Exception as error:
@@ -313,7 +361,10 @@ class ConfigManager:
     def fetch_ai_models(self) -> List[str]:
         """
         Returns a list of available and enabled model IDs.
-        Handles provider priority (Cerebras > Groq) using the 'family' field.
+        Handles provider priority (Cerebras > Groq) using the 'family' field logic.
+
+        Returns:
+            List[str]: List of model identifiers valid for the current API keys.
         """
         if app_state.cached_models:
             return app_state.cached_models
@@ -337,6 +388,7 @@ class ConfigManager:
             selected_models_map: Dict[str, Dict] = {}
 
             for item in app_state.cached_remote_config:
+                # Ensure item is a valid model definition
                 if "name" not in item or not isinstance(item.get("advantage"), dict):
                     continue
 
@@ -423,15 +475,17 @@ class ConfigManager:
         settings_dict = app_state.settings
 
         # Set defaults if keys are missing
-        for key, default in [
-            ("language", AppConfig.DEFAULT_LANGUAGE),
-            ("model", AppConfig.DEFAULT_AI_MODEL),
-            ("audio_model", AppConfig.DEFAULT_AUDIO_MODEL),
-            ("sound_enabled", True),
-            ("mute_sound", True),
-            ("chart_type", "line"),
-        ]:
-            settings_dict.setdefault(key, default)
+        defaults = {
+            "language": AppConfig.DEFAULT_LANGUAGE,
+            "model": AppConfig.DEFAULT_AI_MODEL,
+            "audio_model": AppConfig.DEFAULT_AUDIO_MODEL,
+            "sound_enabled": True,
+            "mute_sound": True,
+            "chart_type": "line",
+        }
+
+        for key, default_val in defaults.items():
+            settings_dict.setdefault(key, default_val)
 
         # Update global state attributes
         app_state.language = settings_dict["language"]
@@ -479,13 +533,22 @@ class ConfigManager:
             logging.error(f"Error saving settings: {error}")
 
     def check_if_model_is_multimodal(self, model_id: str) -> bool:
-        """Checks if the given model ID supports vision capabilities."""
+        """
+        Checks if the given model ID supports vision capabilities.
+
+        Args:
+            model_id (str): The model identifier.
+
+        Returns:
+            bool: True if the model is multimodal/vision-enabled.
+        """
         if not app_state.cached_remote_config or not model_id:
             return False
         try:
             for item in app_state.cached_remote_config:
                 if item.get("name") == model_id:
                     advantage = item.get("advantage", "")
+                    # Extract description from localized dict or string
                     description = (
                         advantage.get("en", "")
                         if isinstance(advantage, dict)
@@ -512,11 +575,10 @@ class ReplacementManager:
         """Loads replacement rules from the file."""
         if self.file_path.exists():
             try:
-                return json.loads(self.file_path.read_text(encoding="utf-8")).get(
-                    "replacements", []
-                )
-            except Exception:
-                pass
+                content = self.file_path.read_text(encoding="utf-8")
+                return json.loads(content).get("replacements", [])
+            except Exception as error:
+                logging.warning(f"Failed to load replacements: {error}")
         return []
 
     def save(self, replacements: List[Dict[str, str]]) -> bool:
@@ -525,14 +587,15 @@ class ReplacementManager:
             with open(self.file_path, "w", encoding="utf-8") as file_handle:
                 json.dump({"replacements": replacements}, file_handle, indent=4)
             return True
-        except Exception:
+        except Exception as error:
+            logging.error(f"Failed to save replacements: {error}")
             return False
 
 
 class HistoryManager:
     """
     Manages the history of transcribed or generated text.
-    NOW SECURED: Data is encrypted at rest using Fernet (AES-128).
+    Security: Data is encrypted at rest using Fernet (AES-128).
     """
 
     def __init__(
@@ -545,7 +608,10 @@ class HistoryManager:
         self.fernet = Fernet(key)
 
     def get_all(self) -> List[Dict[str, Any]]:
-        """Retrieves and decrypts the full history list."""
+        """
+        Retrieves and decrypts the full history list.
+        Handles migration from plaintext if necessary.
+        """
         if not self.history_file.exists():
             return []
 
@@ -557,9 +623,11 @@ class HistoryManager:
                 return []
 
             try:
+                # Attempt to decrypt
                 decrypted_content = self.fernet.decrypt(file_content)
                 return json.loads(decrypted_content.decode("utf-8")).get("history", [])
             except Exception:
+                # Encryption failed; assume plaintext (legacy) and migrate
                 logging.warning(
                     "History file appears to be plaintext. Migrating to encrypted storage..."
                 )
@@ -578,7 +646,7 @@ class HistoryManager:
             return []
 
     def save_history(self, history: List[Dict[str, Any]]) -> bool:
-        """Helper to encrypt and save data."""
+        """Helper to encrypt and save history data."""
         try:
             json_str = json.dumps({"history": history}, indent=4)
             encrypted_data = self.fernet.encrypt(json_str.encode("utf-8"))
@@ -591,7 +659,10 @@ class HistoryManager:
             return False
 
     def add_entry(self, text: str) -> None:
-        """Adds a new text entry to the history file (Encrypted)."""
+        """
+        Adds a new text entry to the history file (Encrypted).
+        Trims history to 10,000 entries.
+        """
         if not text:
             return
         try:
@@ -603,6 +674,7 @@ class HistoryManager:
             }
             history.insert(0, new_entry)
 
+            # Enforce limit
             if len(history) > 10000:
                 history = history[:10000]
 
@@ -617,7 +689,7 @@ class HistoryManager:
 
 
 class AgentManager:
-    """Manages AI agent configurations."""
+    """Manages AI agent configurations stored in JSON."""
 
     def __init__(self, agents_file: Path, config_manager: ConfigManager) -> None:
         self.agents_file = agents_file
@@ -625,12 +697,15 @@ class AgentManager:
         self.agents_file.parent.mkdir(parents=True, exist_ok=True)
 
     def load_agents(self) -> List[Dict[str, Any]]:
-        """Loads agents and verifies their models are available."""
+        """
+        Loads agents and validates their models against current availability.
+        If a model is unavailable, it is cleared in the agent config.
+        """
         if self.agents_file.exists():
             try:
-                agents = json.loads(self.agents_file.read_text(encoding="utf-8")).get(
-                    "agents", []
-                )
+                content = self.agents_file.read_text(encoding="utf-8")
+                agents = json.loads(content).get("agents", [])
+
                 # Verify model availability for each agent
                 available_models = self.config_manager.fetch_ai_models()
                 for agent in agents:
@@ -652,7 +727,7 @@ class AgentManager:
 
 
 class StatsManager:
-    """Manages usage statistics and activity logging."""
+    """Manages usage statistics and daily activity logging."""
 
     def __init__(
         self, app_state: AppState, config_manager: ConfigManager, activity_file: Path
@@ -663,7 +738,7 @@ class StatsManager:
         self.activity_file.parent.mkdir(parents=True, exist_ok=True)
 
     def _record_daily_activity(self, word_count: int) -> None:
-        """Records word count for the current date."""
+        """Records word count for the current date in the activity file."""
         today_str = date.today().strftime("%Y-%m-%d")
         activity_data: Dict[str, Any] = {"daily_activity": []}
 
@@ -676,6 +751,8 @@ class StatsManager:
                 pass
 
         entries = activity_data.setdefault("daily_activity", [])
+
+        # Check if entry for today exists
         entry = next((e for e in entries if e.get("date") == today_str), None)
 
         if entry:
@@ -696,7 +773,15 @@ class StatsManager:
         process_duration: float = 0.0,
         is_generation: bool = False,
     ) -> None:
-        """Updates total statistics (words, time) based on usage."""
+        """
+        Updates cumulative statistics (total words, time) based on usage.
+
+        Args:
+            transcribed_text (str): The final text processed.
+            audio_duration (float): Length of the audio input in seconds.
+            process_duration (float): Time taken to process the request.
+            is_generation (bool): Whether this was an AI generation vs pure transcription.
+        """
         if not transcribed_text:
             return
 
@@ -718,28 +803,44 @@ class StatsManager:
             logging.error(f"Stats error: {error}")
 
     def get_formatted_dashboard_stats(self) -> Dict[str, Union[int, float]]:
-        """Calculates derived stats like Words Per Minute (WPM) and time saved."""
+        """
+        Calculates derived stats for the UI dashboard.
+
+        Returns:
+            Dict: Contains total_words, average_speed (WPM), and time_saved (estimated).
+        """
         stats = self.app_state.settings.get("stats", {})
         total_words = stats.get("total_words", 0)
-        total_time = stats.get("total_time", 0.0)
+        total_time_seconds = stats.get("total_time", 0.0)
 
-        # Derived calculations
-        # WPM = Words / (Minutes)
-        wpm = (total_words / (total_time / 60.0)) if total_time > 0 else 0
+        # WPM Calculation = Words / (Minutes)
+        minutes = total_time_seconds / 60.0
+        wpm = (total_words / minutes) if minutes > 0 else 0
 
-        # Estimate: 40 WPM typing speed vs actual speaking time
-        time_saved = (
-            (total_words / 40.0) - (total_time / 60.0) if total_words > 0 else 0
+        # Time Saved Estimation:
+        # Assumes 40 WPM typing speed vs actual speaking time.
+        # Saved = (Time to type) - (Time to speak)
+        typing_minutes_estimated = total_words / 40.0
+        time_saved_minutes = (
+            typing_minutes_estimated - minutes if total_words > 0 else 0
         )
 
         return {
             "total_words": total_words,
             "average_speed": round(wpm),
-            "time_saved": round(max(0, time_saved), 2),
+            "time_saved": round(max(0, time_saved_minutes), 2),
         }
 
     def get_chart_data(self, days: int = 7) -> Dict[str, Any]:
-        """Prepares data for the activity chart over the specified number of days."""
+        """
+        Prepares activity data for the frontend chart over the specified period.
+
+        Args:
+            days (int): Number of days to look back (e.g., 7 or 30).
+
+        Returns:
+            Dict: {'data': {date: words}, 'type': 'line'|'bar'}
+        """
         results = {}
         end_date = date.today()
         start_date = end_date - timedelta(days=days - 1)
@@ -753,15 +854,17 @@ class StatsManager:
             except Exception:
                 pass
 
+        # Map existing entries for fast lookup
         daily_map = {
             e.get("date"): e.get("words", 0)
             for e in activity_log.get("daily_activity", [])
         }
 
-        current = start_date
-        while current <= end_date:
-            date_str = current.strftime("%Y-%m-%d")
+        # Fill in all dates in range, including those with 0 activity
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.strftime("%Y-%m-%d")
             results[date_str] = daily_map.get(date_str, 0)
-            current += timedelta(days=1)
+            current_date += timedelta(days=1)
 
         return {"data": results, "type": self.app_state.chart_type}

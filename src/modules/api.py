@@ -1,3 +1,11 @@
+"""
+API Interface for Ozmoz.
+
+This module acts as the bridge between the Frontend (HTML/JS) running in pywebview
+and the Python Backend logic. It exposes methods that can be called directly
+from JavaScript via `window.pywebview.api`.
+"""
+
 import logging
 import os
 import subprocess
@@ -8,17 +16,16 @@ import uuid
 import webbrowser
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import urlparse
 
 import pyperclip
 import requests
 import webview
 import win32con
 import win32gui
-
-# Qt Imports for UI management
 from PySide6.QtWidgets import QApplication
 
-# Internal modules
+# --- Local Modules ---
 from modules.config import AppConfig, AppState
 from modules.local_audio import local_whisper
 
@@ -26,7 +33,12 @@ from modules.local_audio import local_whisper
 class API:
     """
     Interface exposed to JavaScript via pywebview.
-    Acts as a bridge between the Frontend (HTML/JS) and the Python Backend.
+
+    This class handles:
+    - Window management (move, resize, hide, show).
+    - Settings logic (language, API keys, models).
+    - Application lifecycle (update, exit).
+    - Feature triggers (recording, AI generation, logs).
     """
 
     def __init__(
@@ -44,7 +56,10 @@ class API:
         agent_manager: Any,
         ai_generation_manager: Any,
         ui_resource_loader: Any,
-    ):
+    ) -> None:
+        """
+        Initialize the API with all necessary service dependencies.
+        """
         self._app_state = app_state
         self._config_manager = config_manager
         self._window_manager = window_manager
@@ -63,11 +78,11 @@ class API:
 
     def open_main_window(self) -> None:
         """
-        Loads the HTML content into the main window and positions it.
+        Loads the main HTML content and positions the window.
         """
         if self._app_state.window:
             self._app_state.window.load_html(
-                self._ui_resource_loader.create_html("templates/index.html")
+                self._ui_resource_loader.create_html("src/templates/index.html")
             )
             self._app_state.window.resize(415, 117)
             self._window_manager.move_main_window(100, 100)
@@ -75,6 +90,9 @@ class API:
     def get_app_version(self) -> Dict[str, str]:
         """
         Returns the current application version.
+
+        Returns:
+            Dict[str, str]: {"version": "x.y.z"}
         """
         return {"version": AppConfig.VERSION}
 
@@ -91,9 +109,9 @@ class API:
         if self._app_state.stop_app_event:
             self._app_state.stop_app_event.set()
 
-        q_app = QApplication.instance()
-        if q_app:
-            q_app.quit()
+        qt_app = QApplication.instance()
+        if qt_app:
+            qt_app.quit()
 
         try:
             if self._app_state.settings_window:
@@ -106,12 +124,15 @@ class API:
     def get_window_pos(self) -> Dict[str, Any]:
         """
         Retrieves the current X and Y coordinates of the main window.
+
+        Returns:
+            Dict[str, Any]: {"x": int, "y": int} or {"error": str}.
         """
         try:
-            hwnd = win32gui.FindWindow(None, "Ozmoz")
-            if not hwnd:
+            window_handle = win32gui.FindWindow(None, "Ozmoz")
+            if not window_handle:
                 return {"x": 0, "y": 0, "error": "Window not found"}
-            rect = win32gui.GetWindowRect(hwnd)
+            rect = win32gui.GetWindowRect(window_handle)
             # rect[0] is x, rect[1] is y
             return {"x": rect[0], "y": rect[1]}
         except Exception as error:
@@ -129,9 +150,9 @@ class API:
         Moves the window relative to its current position based on mouse delta.
         """
         try:
-            hwnd = win32gui.FindWindow(None, "Ozmoz")
-            if hwnd:
-                rect = win32gui.GetWindowRect(hwnd)
+            window_handle = win32gui.FindWindow(None, "Ozmoz")
+            if window_handle:
+                rect = win32gui.GetWindowRect(window_handle)
                 current_x, current_y = rect[0], rect[1]
 
                 new_x = current_x + int(delta_x)
@@ -153,16 +174,13 @@ class API:
     def hide_window(self) -> Dict[str, Union[bool, str]]:
         """
         Hides the main window.
-
-        FIX: Removed re-registering hotkeys here.
-        Hiding the window should not destabilize keyboard hooks.
         """
-        hwnd = win32gui.FindWindow(None, "Ozmoz")
-        if not hwnd:
+        window_handle = win32gui.FindWindow(None, "Ozmoz")
+        if not window_handle:
             return {"success": False, "error": "Window not found."}
 
-        if win32gui.IsWindowVisible(hwnd):
-            win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+        if win32gui.IsWindowVisible(window_handle):
+            win32gui.ShowWindow(window_handle, win32con.SW_HIDE)
 
         return {"success": True}
 
@@ -171,11 +189,11 @@ class API:
         Shows the window as TopMost without stealing focus (ShowNoActivate).
         """
         try:
-            hwnd = win32gui.FindWindow(None, "Ozmoz")
-            if hwnd:
-                win32gui.ShowWindow(hwnd, win32con.SW_SHOWNA)
+            window_handle = win32gui.FindWindow(None, "Ozmoz")
+            if window_handle:
+                win32gui.ShowWindow(window_handle, win32con.SW_SHOWNA)
                 win32gui.SetWindowPos(
-                    hwnd,
+                    window_handle,
                     win32con.HWND_TOPMOST,
                     0,
                     0,
@@ -222,7 +240,9 @@ class API:
 
             new_window = webview.create_window(
                 "Ozmoz Settings",
-                html=self._ui_resource_loader.create_html("templates/settings.html"),
+                html=self._ui_resource_loader.create_html(
+                    "src/templates/settings.html"
+                ),
                 js_api=self,
                 width=1015,
                 height=650,
@@ -319,7 +339,7 @@ class API:
                 name = model_item["name"]
                 family = model_item.get("family", name)
 
-                # --- FILTERING LOGIC ---
+                # Filter based on key availability
                 if has_any_key:
                     if name not in available_model_ids:
                         continue
@@ -328,23 +348,28 @@ class API:
                         continue
                     seen_families.add(family)
 
-                # --- DATA CONSTRUCTION ---
                 advantage_data = model_item.get("advantage", {})
                 translated_advantage = advantage_data.get(
                     self._app_state.language, advantage_data.get("en", "No description")
                 )
                 provider = model_item.get("provider", "groq")
 
+                is_multimodal = (
+                    "vision" in (advantage_data.get("en", "") or "").lower()
+                    or name in self._app_state.screen_vision_model_list
+                )
+                is_web_model = (
+                    name in self._app_state.tool_model_list
+                    or "web" in (advantage_data.get("en", "") or "").lower()
+                )
+
                 model_data = {
                     "id": name,
                     "name": name,
                     "advantage": translated_advantage,
                     "description": model_item.get("description", ""),
-                    "is_multimodal": "vision"
-                    in (advantage_data.get("en", "") or "").lower()
-                    or name in self._app_state.screen_vision_model_list,
-                    "is_web_model": name in self._app_state.tool_model_list
-                    or "web" in (advantage_data.get("en", "") or "").lower(),
+                    "is_multimodal": is_multimodal,
+                    "is_web_model": is_web_model,
                     "provider": provider,
                     "family": family,
                 }
@@ -356,7 +381,6 @@ class API:
         """
         Translates descriptions for audio models and injects the hardcoded Local Model.
         """
-
         if not self._app_state.cached_remote_config:
             self._config_manager.load_and_parse_remote_config()
 
@@ -419,7 +443,7 @@ class API:
         if local_whisper.is_loading:
             return {"success": False, "error": "Download already in progress."}
 
-        def run_install():
+        def run_install() -> None:
             success = local_whisper.download()
             if self._app_state.settings_window:
                 status = "success" if success else "error"
@@ -708,28 +732,25 @@ class API:
 
     def temporarily_disable_all_hotkeys(self) -> Dict[str, Union[bool, str]]:
         """
-        Cleanly stops the hotkey listener (e.g., pynput) to allow for
-        recording a new key combination or performing other exclusive input tasks.
+        Cleanly stops the hotkey listener to allow recording a new combination.
         """
         try:
             self._hotkey_manager.stop_listening()
             logging.info("Hotkeys successfully disabled.")
             return {"success": True}
         except Exception as error:
-            # Use a clearer log message indicating the operation failed
             logging.error(f"Failed to temporarily disable hotkeys: {error}")
             return {"success": False, "error": str(error)}
 
     def restore_all_hotkeys(self) -> Dict[str, Union[bool, str]]:
         """
-        Restarts the hotkey listener by re-registering all previously defined hotkeys.
+        Restarts the hotkey listener by re-registering all defined hotkeys.
         """
         try:
             self._hotkey_manager.register_all()
             logging.info("Hotkeys successfully restored and listener restarted.")
             return {"success": True}
         except Exception as error:
-            # Clear log message for the restoration failure
             logging.error(f"Failed to restore and register hotkeys: {error}")
             return {"success": False, "error": str(error)}
 
@@ -795,13 +816,11 @@ class API:
         """
         try:
             # SECURITY: URL Validation
-            from urllib.parse import urlparse
-
             parsed_url = urlparse(url)
 
             # Whitelist allowed domains for updates
-            ALLOWED_DOMAINS = ["github.com", "objects.githubusercontent.com"]
-            if parsed_url.hostname not in ALLOWED_DOMAINS:
+            allowed_domains = ["github.com", "objects.githubusercontent.com"]
+            if parsed_url.hostname not in allowed_domains:
                 raise ValueError(
                     "Security Violation: Update URL domain not whitelisted."
                 )
@@ -811,7 +830,6 @@ class API:
 
             temp_dir = tempfile.gettempdir()
             file_name = url.split("/")[-1]
-            # Ensure filename ends with .exe for safety
             if not file_name.lower().endswith(".exe"):
                 file_name += ".exe"
 
@@ -1002,9 +1020,7 @@ class API:
             masked_keys = {}
 
             for key, value in raw_keys.items():
-                if value and len(value) > 4:
-                    masked_keys[key] = "************************"
-                elif value:
+                if value:
                     masked_keys[key] = "************************"
                 else:
                     masked_keys[key] = ""

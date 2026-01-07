@@ -1,3 +1,14 @@
+"""
+Service Layer for Ozmoz.
+
+This module orchestrates workflows involving multiple components:
+- Context Management: Token counting and history compression.
+- Generation Control: Coordinating Audio, UI, and API calls.
+- Vision Services: Screen capture and multimodal processing.
+- Web Search: Browser-enabled context retrieval.
+- AI Orchestration: Managing agents, prompts, and streaming responses.
+"""
+
 import concurrent.futures
 import json
 import logging
@@ -8,21 +19,21 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+# --- Third-Party Imports ---
 import pyautogui
 import pyperclip
-
-# requests import removed (OCR dependency eliminated)
 import win32con
 import win32gui
 from cerebras.cloud.sdk import Cerebras
 from groq import Groq
 
+# --- Local Imports ---
 from modules.config import AppConfig
 
 
 class ContextManager:
     """
-    Manages the context window for LLMs.
+    Manages the context window for Large Language Models (LLMs).
 
     Responsibilities:
     - Token counting approximation (heuristic based).
@@ -31,12 +42,23 @@ class ContextManager:
     """
 
     def __init__(self, app_state: Any) -> None:
+        """
+        Initialize the ContextManager.
+
+        Args:
+            app_state (Any): Global application state object.
+        """
         self.app_state = app_state
 
     def get_model_context_limit(self, model_id: str) -> int:
         """
-        Retrieves the effective token limit for a specific model from the cached configuration.
-        Defaults to a safe fallback if config is unreachable.
+        Retrieves the effective token limit for a specific model from configuration.
+
+        Args:
+            model_id (str): The identifier of the AI model.
+
+        Returns:
+            int: The maximum tokens per minute (TPM) or a safe default.
         """
         default_limit = 6000
         if not self.app_state.cached_remote_config:
@@ -51,6 +73,12 @@ class ContextManager:
         """
         Heuristic token counting (approx. 1 token ~= 3 chars).
         Used for low-latency pre-flight checks before API calls.
+
+        Args:
+            text (str): The text to estimate.
+
+        Returns:
+            int: Estimated token count.
         """
         return len(text) // 3 if text else 0
 
@@ -58,6 +86,13 @@ class ContextManager:
         """
         Hard truncation of text to fit within a specific token budget.
         Attempts to cut at word boundaries for legibility.
+
+        Args:
+            text (str): The input text.
+            max_tokens (int): The maximum allowed tokens.
+
+        Returns:
+            str: The truncated text string.
         """
         if not text or self.count_tokens_approx(text) <= max_tokens:
             return text
@@ -66,12 +101,15 @@ class ContextManager:
         if len(text) <= max_chars:
             return text
 
-        text = text[:max_chars]
-        # Attempt to cut at the last space to avoid splitting words
-        if (last_space := text.rfind(" ")) != -1:
-            text = text[:last_space]
+        # Initial hard cut
+        truncated_text = text[:max_chars]
 
-        return text + "\n... [TRUNCATED] ..."
+        # Attempt to cut at the last space to avoid splitting words
+        last_space_index = truncated_text.rfind(" ")
+        if last_space_index != -1:
+            truncated_text = truncated_text[:last_space_index]
+
+        return truncated_text + "\n... [TRUNCATED] ..."
 
     def reduce_context_to_fit_limit(
         self,
@@ -88,10 +126,17 @@ class ContextManager:
         2. If over limit, compress History (keep System + last exchange).
         3. If still over limit, truncate User Selection.
 
-        Note: OCR logic has been completely removed to rely on Multimodal Vision.
+        Args:
+            fixed_prompt (str): Immutable system/user instructions.
+            history (List[Dict]): Conversation history.
+            selected_text (str): Context from clipboard/selection.
+            model_limit (int): The target token limit.
+
+        Returns:
+            Tuple[List[Dict], str]: Optimized history and selected text.
         """
-        RESPONSE_BUFFER = 1024
-        target_limit = model_limit - RESPONSE_BUFFER
+        response_buffer = 1024
+        target_limit = model_limit - response_buffer
 
         def calculate_total_tokens() -> int:
             history_text = "".join(
@@ -108,8 +153,8 @@ class ContextManager:
             return history, selected_text
 
         # --- Compression Strategy ---
-        MIN_HISTORY_TOKENS = 300
-        SELECTED_PRIORITY = 0.9
+        min_history_tokens = 300
+        selected_text_priority_ratio = 0.9
 
         # 1. History Compression (Keep System prompt + last complete exchange)
         if history:
@@ -135,7 +180,7 @@ class ContextManager:
             for message in compressed_history:
                 if isinstance(message.get("content"), str):
                     message["content"] = self.truncate_text_by_tokens(
-                        message["content"], MIN_HISTORY_TOKENS
+                        message["content"], min_history_tokens
                     )
 
             history = compressed_history
@@ -143,10 +188,10 @@ class ContextManager:
         else:
             current_tokens = initial_tokens
 
-        # 2. Selection Reduction (No OCR/ImageText reduction needed anymore)
+        # 2. Selection Reduction
         if current_tokens > target_limit and selected_text:
             keep_count = int(
-                self.count_tokens_approx(selected_text) * SELECTED_PRIORITY
+                self.count_tokens_approx(selected_text) * selected_text_priority_ratio
             )
             selected_text = self.truncate_text_by_tokens(selected_text, keep_count)
             current_tokens = calculate_total_tokens()
@@ -188,6 +233,9 @@ class GenerationController:
         config_manager: Any,
         credential_manager: Any,
     ) -> None:
+        """
+        Initialize the GenerationController with dependency injection.
+        """
         self.app_state = app_state
         self.window = window
         self.audio_manager = audio_manager
@@ -205,6 +253,9 @@ class GenerationController:
         """
         Ensures the system is in a valid state to start a generation cycle.
         Checks for hotkey stability and concurrent operations.
+
+        Returns:
+            Tuple[bool, Optional[str]]: (Success, Error Message).
         """
         start_time = time.time()
 
@@ -244,8 +295,8 @@ class GenerationController:
                     self.app_state.groq_client = Groq(api_key=groq_key)
                     logging.info("Generation Controller: Groq client warmed up.")
 
-            except Exception as e:
-                logging.warning(f"LLM Client warmup warning: {e}")
+            except Exception as error:
+                logging.warning(f"LLM Client warmup warning: {error}")
 
         threading.Thread(target=_warmup_worker, daemon=True).start()
 
@@ -263,8 +314,8 @@ class GenerationController:
                         f"displayError({json.dumps(error_message)})"
                     )
                     self.window.evaluate_js("setSettingsButtonState(false)")
-            except Exception as e:
-                logging.error(f"UI Timeout Error: {e}")
+            except Exception as error:
+                logging.error(f"UI Timeout Error: {error}")
 
             self.app_state.is_busy = False
             self.app_state.is_recording = False
@@ -276,6 +327,12 @@ class GenerationController:
         """
         Initiates the audio capture workflow.
         Handles UI state transitions and spawns the recording thread.
+
+        Args:
+            css_class (str): CSS class to apply for visual feedback.
+
+        Returns:
+            str: Path to the temporary audio file.
         """
         logging.info(f"Start recording ({css_class})...")
 
@@ -313,8 +370,8 @@ class GenerationController:
                 )
 
             self.window.evaluate_js("startVisualizationOnly()")
-        except Exception as e:
-            logging.error(f"JS Start Recording Error: {e}")
+        except Exception as error:
+            logging.error(f"JS Start Recording Error: {error}")
 
         # Ensure audio subsystem is ready
         self.audio_manager.initialize()
@@ -342,7 +399,12 @@ class GenerationController:
     def stop_recording(self, css_class: str = "ai-recording") -> Tuple[str, float]:
         """
         Finalizes the recording session, restores system volume, and updates UI.
-        Returns the file path and duration for downstream processing.
+
+        Args:
+            css_class (str): CSS class for UI feedback.
+
+        Returns:
+            Tuple[str, float]: (File Path, Duration in seconds).
         """
         logging.info(f"Stop recording ({css_class}).")
 
@@ -446,8 +508,8 @@ class GenerationController:
             if self.window:
                 self.window.resize(415, 114)
 
-        except Exception as e:
-            logging.error(f"Error displaying loader: {e}")
+        except Exception as error:
+            logging.error(f"Error displaying loader: {error}")
 
     def reset_ui_for_new_generation(self) -> None:
         """
@@ -491,6 +553,9 @@ class GenerationController:
             model: Model identifier.
             show_streaming: If True, streams tokens to UI.
             processing_mode: 'text', 'vision', or 'web'.
+
+        Returns:
+            Optional[str]: The complete response text, or None if error.
         """
         start_time = time.time()
 
@@ -529,9 +594,9 @@ class GenerationController:
 
             return result_text
 
-        except Exception as e:
-            logging.critical(f"Generation Error ({provider}): {e}", exc_info=True)
-            self._handle_api_error(e)
+        except Exception as error:
+            logging.critical(f"Generation Error ({provider}): {error}", exc_info=True)
+            self._handle_api_error(error)
             return None
 
     def _call_groq(self, messages: List[Dict[str, Any]], model: str) -> Any:
@@ -592,12 +657,13 @@ class GenerationController:
         buffer = ""
         is_thinking = None
 
-        START_TAG = "<think>"
-        END_TAG = "</think>"
+        start_tag = "<think>"
+        end_tag = "</think>"
 
         for chunk in stream:
             content = chunk.choices[0].delta.content or ""
 
+            # Standard streaming path
             if is_thinking is False:
                 if show_streaming:
                     safe_content = json.dumps(content)
@@ -607,12 +673,14 @@ class GenerationController:
 
             buffer += content
 
+            # Detect start of thinking block
             if is_thinking is None:
                 stripped_buffer = buffer.lstrip()
-                if stripped_buffer.startswith(START_TAG):
+                if stripped_buffer.startswith(start_tag):
                     is_thinking = True
-                elif len(stripped_buffer) >= len(START_TAG) or (
-                    stripped_buffer and not START_TAG.startswith(stripped_buffer)
+                # Buffer has content but doesn't start with tag -> Not thinking
+                elif len(stripped_buffer) >= len(start_tag) or (
+                    stripped_buffer and not start_tag.startswith(stripped_buffer)
                 ):
                     is_thinking = False
                     if show_streaming:
@@ -621,8 +689,9 @@ class GenerationController:
                         )
                     full_result += buffer
 
-            if is_thinking is True and END_TAG in buffer:
-                _, _, remainder = buffer.partition(END_TAG)
+            # Detect end of thinking block
+            if is_thinking is True and end_tag in buffer:
+                _, _, remainder = buffer.partition(end_tag)
                 is_thinking = False
                 if remainder:
                     if show_streaming:
@@ -636,8 +705,8 @@ class GenerationController:
 
         return full_result
 
-    def _handle_api_error(self, e: Exception) -> None:
-        logging.error(f"API Error Handler: {str(e)}")
+    def _handle_api_error(self, error: Exception) -> None:
+        logging.error(f"API Error Handler: {str(error)}")
         try:
             self.window.evaluate_js("setAIButtonState('idle')")
         except Exception:
@@ -646,7 +715,7 @@ class GenerationController:
         self.app_state.is_ai_response_visible = False
         msg = "An API error occurred."
 
-        status_code = getattr(e, "status_code", None)
+        status_code = getattr(error, "status_code", None)
 
         if status_code == 413:
             msg = "Request too large."
@@ -692,6 +761,7 @@ class VisionManager:
         credential_manager: Any,
         generation_controller: GenerationController,
     ) -> None:
+        """Initialize the VisionManager."""
         self.app_state = app_state
         self.config_manager = config_manager
         self.screen_manager = screen_manager
@@ -886,8 +956,8 @@ You are Ozmoz, a helpful AI assistant capable of seeing the user's screen. Today
                     {"role": "assistant", "content": response}
                 )
 
-        except Exception as e:
-            logging.error(f"Vision Crash: {e}", exc_info=True)
+        except Exception as error:
+            logging.error(f"Vision Crash: {error}", exc_info=True)
             try:
                 self.generation_controller.window.evaluate_js(
                     "displayError('Unexpected error or incompatible model.')"
@@ -925,6 +995,7 @@ class WebSearchManager:
         clipboard_manager: Any,
         generation_controller: GenerationController,
     ) -> None:
+        """Initialize the WebSearchManager."""
         self.app_state = app_state
         self.config_manager = config_manager
         self.transcription_service = transcription_service
@@ -1084,8 +1155,8 @@ You are Ozmoz, a direct and efficient desktop AI assistant. Today is {date_str}.
                     {"role": "assistant", "content": response}
                 )
 
-        except Exception as e:
-            logging.error(f"Web Search Crash: {e}", exc_info=True)
+        except Exception as error:
+            logging.error(f"Web Search Crash: {error}", exc_info=True)
             if self.generation_controller.window:
                 self.generation_controller.window.evaluate_js(
                     "displayError('Unexpected error.')"
@@ -1132,6 +1203,7 @@ class aiGenerationManager:
         credential_manager: Any,
         generation_controller: GenerationController,
     ) -> None:
+        """Initialize the aiGenerationManager."""
         self.app_state = app_state
         self.config_manager = config_manager
         self.context_manager = context_manager
@@ -1228,10 +1300,10 @@ class aiGenerationManager:
 
         try:
             context = self.capture_context_for_agent(agent, model)
-        except PermissionError as e:
+        except PermissionError as error:
             if self.generation_controller.window:
                 self.generation_controller.window.evaluate_js(
-                    f"displayError({json.dumps(str(e))})"
+                    f"displayError({json.dumps(str(error))})"
                 )
             return None
 
@@ -1319,8 +1391,8 @@ You are Ozmoz, a specialized AI agent.
             pyautogui.hotkey("ctrl", "v")
             # Restore clipboard after short delay
             threading.Timer(0.5, lambda: pyperclip.copy(previous_clipboard)).start()
-        except Exception as e:
-            logging.error(f"Autopaste Error: {e}")
+        except Exception as error:
+            logging.error(f"Autopaste Error: {error}")
 
     def execute_general_generation(
         self, text_input: str, context: Dict[str, Any], duration: float
@@ -1524,16 +1596,16 @@ You are Ozmoz.
 
                     self.execute_agent(agent, instruction, transcript, duration)
                     return
-                except Exception as e:
-                    logging.error(f"Agent Error: {e}")
+                except Exception as error:
+                    logging.error(f"Agent Error: {error}")
                     return
 
             # 5. General Generation
             screen_path = generation_context.get("screenshot_path")
             self.execute_general_generation(transcript, generation_context, duration)
 
-        except Exception as e:
-            logging.error(f"AI Crash: {e}", exc_info=True)
+        except Exception as error:
+            logging.error(f"AI Crash: {error}", exc_info=True)
             self.app_state.is_recording = False
             self.app_state.ai_recording = False
             self.generation_controller.cleanup_recording_ui()

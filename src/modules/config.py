@@ -1,19 +1,35 @@
+"""
+Configuration Management Module for Ozmoz.
+
+This module defines the core configuration constants and the application state
+container. It also handles the logging configuration, including custom formatters
+and filters to ensure clean and useful logs.
+"""
+
 import collections
 import logging
 import os
 import sys
 import threading
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
+# --- Third-Party Imports ---
 import pyaudio
 import webview
 from PySide6.QtWidgets import QSystemTrayIcon
 
+# --- Environment Configuration ---
+# Suppress noisy Qt logging
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.window=false"
 
 
 class AppConfig:
+    """
+    Global application configuration constants.
+    Contains versioning, API endpoints, audio settings, and default preferences.
+    """
+
     VERSION: str = "1.1.3"
     MUTEX_ID: str = "{f7c9acc6-46a7-4712-89f5-171549439308}-Ozmoz"
 
@@ -21,6 +37,7 @@ class AppConfig:
         "https://api.github.com/repos/zerep-thomas/ozmoz/releases/latest"
     )
 
+    # Audio Configuration
     AUDIO_CHUNK: int = 512
     AUDIO_FORMAT: int = pyaudio.paInt16
     AUDIO_CHANNELS: int = 1
@@ -28,14 +45,17 @@ class AppConfig:
     AUDIO_OPTIMIZED_CHUNK: int = 2048
     AUDIO_OUTPUT_FILENAME: str = "temp_recording.wav"
 
+    # Voice Activity Detection (VAD) Settings
     VAD_ENABLED: bool = True
     VAD_THRESHOLD: int = 300
     VAD_SILENCE_TIMEOUT: float = 0.8
 
+    # Visualizer Settings
     VISUALIZER_POINTS: int = 150
     VISUALIZER_MAX_HEIGHT: int = 150
     VISUALIZER_SCALING_FACTOR: int = 80
 
+    # Defaults
     DEFAULT_LANGUAGE: str = "en"
     DEFAULT_AI_MODEL: str = "llama-3.3-70b-versatile"
     DEFAULT_AUDIO_MODEL: str = "nova-2"
@@ -50,39 +70,50 @@ class AppConfig:
 
 
 class AppState:
+    """
+    Global state container for the application.
+    Holds runtime data, thread locks, UI references, and user preferences.
+    """
+
     def __init__(self) -> None:
-        # Threading & Synchronization
+        """Initialize the application state with default values."""
+
+        # --- Threading & Synchronization ---
         self.keyboard_lock: threading.Lock = threading.Lock()
         self.mutex_handle: Optional[int] = None
         self.transcription_executor: Optional[Any] = None
         self.stop_app_event: threading.Event = threading.Event()
         self.settings_file_lock: threading.Lock = threading.Lock()
 
-        # Graphic Interface
+        # --- Graphic Interface ---
         self.tray_icon_qt: Optional[QSystemTrayIcon] = None
         self.window: Optional[webview.Window] = None
         self.settings_window: Optional[webview.Window] = None
         self.settings_open: bool = False
 
-        # Data & Cache
+        # --- Data & Cache ---
         self.log_handler: Optional[logging.Handler] = None
         self.cached_remote_config: Optional[List[Any]] = None
         self.cached_models: Optional[List[str]] = None
+
+        # Capability Lists (Populated from config)
         self.advanced_model_list: List[str] = []
         self.tool_model_list: List[str] = []
         self.web_search_model_list: List[str] = []
         self.screen_vision_model_list: List[str] = []
+
+        # Update Info
         self.remote_version: Optional[str] = None
         self.remote_update_url: Optional[str] = None
         self.settings: Dict[str, Any] = {}
 
-        # Current Preferences
+        # --- Current Preferences ---
         self.language: str = AppConfig.DEFAULT_LANGUAGE
         self.model: str = AppConfig.DEFAULT_AI_MODEL
         self.last_selected_model: str = AppConfig.DEFAULT_AI_MODEL
         self.audio_model: str = AppConfig.DEFAULT_AUDIO_MODEL
 
-        # Audio State
+        # --- Audio State ---
         self.pyaudio_instance: Optional[pyaudio.PyAudio] = None
         self.audio_stream: Optional[pyaudio.Stream] = None
         self.original_volume: float = 1.0
@@ -91,7 +122,7 @@ class AppState:
         self.sound_enabled: bool = True
         self.mute_sound: bool = True
 
-        # Functional State
+        # --- Functional State ---
         self.is_recording: bool = False
         self.current_recording_path: Optional[str] = None
         self.is_busy: bool = False
@@ -99,58 +130,83 @@ class AppState:
         self.ai_recording: bool = False
         self.recording_start_time: float = 0.0
 
-        # Context & History
+        # --- Context & History ---
         self.original_clipboard: str = ""
         self.transcribed_text_for_ai: str = ""
         self.conversation_history: List[Dict[str, Any]] = []
         self.is_ai_response_visible: bool = False
+
+        # API Clients (Lazy Loaded)
         self.groq_client: Optional[Any] = None
         self.deepgram_client: Optional[Any] = None
         self.cerebras_client: Optional[Any] = None
 
-        # UI Content
+        # --- UI Content Cache ---
         self.settings_html: Optional[str] = None
         self.index_html: Optional[str] = None
 
-        # Features
+        # --- Features ---
         self.chart_type: str = "line"
         self.dashboard_period: int = 7
         self.developer_mode: bool = False
         self.hotkeys: Dict[str, str] = AppConfig.DEFAULT_HOTKEYS.copy()
 
 
+# Global Singleton Instance
 app_state: AppState = AppState()
 
 
 class BufferingLogHandler(logging.Handler):
+    """
+    A logging handler that stores the latest log records in a deque buffer.
+    Useful for displaying logs in the UI (Developer Mode).
+    """
+
     def __init__(self, capacity: int = 1000) -> None:
+        """
+        Args:
+            capacity (int): Maximum number of log records to keep.
+        """
         super().__init__()
-        self.buffer: collections.deque = collections.deque(maxlen=capacity)
+        self.buffer: Deque[Dict[str, str]] = collections.deque(maxlen=capacity)
 
     def emit(self, record: logging.LogRecord) -> None:
+        """
+        Stores the formatted log record in the buffer.
+        """
         self.buffer.append({"level": record.levelname, "message": self.format(record)})
 
 
 class ColoredFormatter(logging.Formatter):
+    """
+    A custom formatter to output colored logs to the console based on severity level.
+    """
+
     RESET_CODE: str = "\033[0m"
     COLOR_MAP: Dict[str, str] = {
-        "DEBUG": "\033[92m",
-        "INFO": "\033[94m",
-        "WARNING": "\033[93m",
-        "ERROR": "\033[91m",
-        "CRITICAL": "\033[41m",
+        "DEBUG": "\033[92m",  # Green
+        "INFO": "\033[94m",  # Blue
+        "WARNING": "\033[93m",  # Yellow
+        "ERROR": "\033[91m",  # Red
+        "CRITICAL": "\033[41m",  # Red Background
     }
 
     def format(self, record: logging.LogRecord) -> str:
+        """Formats the log record with color codes."""
         color: str = self.COLOR_MAP.get(record.levelname, self.RESET_CODE)
         return f"{color}{super().format(record)}{self.RESET_CODE}"
 
 
 class BinaryDataFilter(logging.Filter):
+    """
+    Filters out log messages containing binary data or excessive length to keep logs clean.
+    """
+
     MAX_MESSAGE_LENGTH: int = 1000
     BINARY_PATTERNS: Tuple[str, ...] = ("\\x00", "\\xff")
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """Returns True if the record should be logged, False otherwise."""
         try:
             message: str = str(record.getMessage())
             if any(pattern in message for pattern in self.BINARY_PATTERNS):
@@ -161,13 +217,25 @@ class BinaryDataFilter(logging.Filter):
 
 
 class DuplicateFilter(logging.Filter):
+    """
+    Suppresses identical log messages that occur within a short time window.
+    """
+
     def __init__(self, time_window_seconds: int = 3, max_cache_size: int = 50) -> None:
+        """
+        Args:
+            time_window_seconds (int): Time duration to suppress duplicates.
+            max_cache_size (int): Number of unique messages to track.
+        """
         super().__init__()
         self.time_window: timedelta = timedelta(seconds=time_window_seconds)
-        self.log_cache: collections.deque = collections.deque(maxlen=max_cache_size)
+        self.log_cache: Deque[Tuple[datetime, str]] = collections.deque(
+            maxlen=max_cache_size
+        )
         self.lock = threading.Lock()
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """Returns False if the message is a duplicate within the time window."""
         with self.lock:
             current_time: datetime = datetime.now()
             message: str = record.getMessage()
@@ -184,6 +252,10 @@ class DuplicateFilter(logging.Filter):
 
 
 def setup_logging() -> None:
+    """
+    Configures the root logger with console and buffer handlers.
+    Applies filters and silencing rules for noisy libraries.
+    """
     console_formatter: ColoredFormatter = ColoredFormatter(
         "%(asctime)s - %(levelname)s - %(message)s"
     )
@@ -191,18 +263,21 @@ def setup_logging() -> None:
         "%(asctime)s - %(levelname)s - %(message)s"
     )
 
+    # 1. Console Handler
     console_handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(console_formatter)
     console_handler.setLevel(logging.DEBUG)
     console_handler.addFilter(BinaryDataFilter())
     console_handler.addFilter(DuplicateFilter(time_window_seconds=5))
 
+    # 2. Buffer Handler (For UI Logs)
     app_state.log_handler = BufferingLogHandler()
     app_state.log_handler.setFormatter(buffer_formatter)
     app_state.log_handler.setLevel(logging.DEBUG)
     app_state.log_handler.addFilter(BinaryDataFilter())
     app_state.log_handler.addFilter(DuplicateFilter(time_window_seconds=5))
 
+    # 3. Root Logger Setup
     root_logger: logging.Logger = logging.getLogger()
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
@@ -211,6 +286,7 @@ def setup_logging() -> None:
     root_logger.addHandler(app_state.log_handler)
     root_logger.setLevel(logging.DEBUG)
 
+    # 4. Silence Noisy Libraries
     libraries_to_silence: List[str] = [
         "httpx",
         "httpcore",
