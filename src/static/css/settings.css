@@ -275,7 +275,6 @@ body {
   background-color: var(--color-red);
   border-color: transparent;
   color: white;
-  transform: scale(0.88);
 }
 
 .button.danger:hover {

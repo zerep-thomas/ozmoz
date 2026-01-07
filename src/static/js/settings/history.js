@@ -1,61 +1,106 @@
 /* --- src/static/js/settings/history.js --- */
 
-let allTranscripts = [];
-let fuseInstance = null;
+/**
+ * @fileoverview History Management Module.
+ * Handles fetching, searching, sorting, and rendering of transcription history.
+ */
 
-window.loadTranscripts = () => {
+/**
+ * @typedef {Object} TranscriptEntry
+ * @property {number} id - Unique identifier.
+ * @property {string} text - The transcribed text content.
+ * @property {number} timestamp - Unix timestamp of creation.
+ */
+
+/**
+ * Local buffer for history entries to enable fast filtering/sorting.
+ * @type {TranscriptEntry[]}
+ */
+let transcriptHistoryBuffer = [];
+
+/**
+ * Fuse.js instance for fuzzy searching.
+ * @type {Object|null}
+ */
+let fuseSearchInstance = null;
+
+/**
+ * Fetches history from the backend and initializes the view.
+ *
+ * @async
+ * @returns {Promise<void>}
+ */
+window.loadTranscripts = async () => {
   if (!window.isApiReady()) {
-    console.error("API not available for history.");
+    console.error("[History] API unavailable.");
     window.displayTranscripts([]);
     return;
   }
-  window.pywebview.api
-    .get_history()
-    .then((data) => {
-      allTranscripts = data || [];
-      window.initFuzzySearch();
-      window.sortAndDisplayTranscripts();
-    })
-    .catch((err) => {
-      console.error("History loading error:", err);
-      window.displayTranscripts([]);
-    });
+
+  try {
+    const historyData = await window.pywebview.api.get_history();
+    transcriptHistoryBuffer = Array.isArray(historyData) ? historyData : [];
+    window.initFuzzySearch();
+    window.sortAndDisplayTranscripts();
+  } catch (error) {
+    console.error("[History] Load error:", error);
+    window.displayTranscripts([]);
+  }
 };
 
+/**
+ * Initializes or re-initializes the Fuse.js search index.
+ */
 window.initFuzzySearch = () => {
+  // @ts-ignore - Fuse is loaded globally via vendor script
   if (typeof window.Fuse === "undefined") {
-    console.error("Fuse.js library not loaded.");
+    console.warn("[History] Fuse.js library missing. Search disabled.");
     return;
   }
-  const options = {
+
+  const searchOptions = {
     keys: ["text"],
     includeScore: true,
     threshold: 0.4,
     ignoreLocation: true,
     minMatchCharLength: 2,
   };
-  fuseInstance = new window.Fuse(allTranscripts, options);
+
+  // @ts-ignore
+  fuseSearchInstance = new window.Fuse(transcriptHistoryBuffer, searchOptions);
 };
 
+/**
+ * Renders the list of transcripts into the DOM.
+ * Handles Markdown parsing, syntax highlighting, and math rendering.
+ *
+ * @param {TranscriptEntry[]} dataToDisplay - Filtered list of transcripts.
+ */
 window.displayTranscripts = (dataToDisplay) => {
-  const transcriptList = document.getElementById("transcript-list");
-  const noTranscripts = document.getElementById("no-transcripts");
-  const emptySearch = document.getElementById("empty-search-result");
+  const listContainer = document.getElementById("transcript-list");
+  const noDataMessage = document.getElementById("no-transcripts");
+  const emptySearchMessage = document.getElementById("empty-search-result");
+  const searchInput = document.getElementById("search-transcript");
 
-  if (!transcriptList || !noTranscripts || !emptySearch) return;
+  if (!listContainer || !noDataMessage || !emptySearchMessage) return;
 
-  let md = null;
+  // Initialize Markdown-it parser if available
+  let markdownParser = null;
+  // @ts-ignore
   if (typeof window.markdownit !== "undefined") {
-    md = window.markdownit({
+    // @ts-ignore
+    markdownParser = window.markdownit({
       html: false,
       linkify: true,
       breaks: true,
       typographer: true,
-      highlight: function (str, lang) {
+      highlight: (str, lang) => {
+        // @ts-ignore
         if (lang && window.hljs && window.hljs.getLanguage(lang)) {
           try {
             return (
               '<pre class="hljs"><code>' +
+              // @ts-ignore
               window.hljs.highlight(str, {
                 language: lang,
                 ignoreIllegals: true,
@@ -71,36 +116,41 @@ window.displayTranscripts = (dataToDisplay) => {
     });
   }
 
-  transcriptList.innerHTML = "";
+  // Clear current view
+  listContainer.innerHTML = "";
 
-  if (allTranscripts.length === 0) {
-    noTranscripts.style.display = "block";
-    emptySearch.style.display = "none";
-    transcriptList.style.display = "none";
+  // 1. Handle Empty State (No history at all)
+  if (transcriptHistoryBuffer.length === 0) {
+    noDataMessage.style.display = "block";
+    emptySearchMessage.style.display = "none";
+    listContainer.style.display = "none";
     return;
   }
 
-  noTranscripts.style.display = "none";
-  transcriptList.style.display = "block";
+  noDataMessage.style.display = "none";
+  listContainer.style.display = "block";
 
-  const searchValue = document.getElementById("search-transcript").value;
-  if (dataToDisplay.length === 0 && searchValue) {
-    emptySearch.style.display = "block";
+  // 2. Handle Search State (History exists, but filter matches nothing)
+  const isSearchActive = searchInput && searchInput.value.length > 0;
+  if (dataToDisplay.length === 0 && isSearchActive) {
+    emptySearchMessage.style.display = "block";
   } else {
-    emptySearch.style.display = "none";
+    emptySearchMessage.style.display = "none";
   }
 
+  // 3. Render Items
   dataToDisplay.forEach((transcript, index) => {
     if (!transcript || !transcript.id || !transcript.text) return;
 
-    const li = document.createElement("li");
-    li.className = "transcript-item";
-    li.id = `transcript-${transcript.id}`;
-    li.setAttribute("data-timestamp", transcript.timestamp);
-    li.style.animationDelay = `${index * 0.05}s`;
+    const listItem = document.createElement("li");
+    listItem.className = "transcript-item";
+    listItem.id = `transcript-${transcript.id}`;
+    listItem.setAttribute("data-timestamp", String(transcript.timestamp));
+    // Staggered animation effect
+    listItem.style.animationDelay = `${index * 0.05}s`;
 
-    const date = new Date(transcript.timestamp);
-    const time = date.toLocaleString(window.getCurrentLanguage(), {
+    const dateObj = new Date(transcript.timestamp);
+    const formattedTime = dateObj.toLocaleString(window.getCurrentLanguage(), {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -109,81 +159,85 @@ window.displayTranscripts = (dataToDisplay) => {
       second: "2-digit",
     });
 
-    let rawText = (transcript.text || "").trim();
-    let contentHtml = "";
+    const rawText = (transcript.text || "").trim();
+    let renderedHtml = "";
 
-    if (md) {
-      let formattedText = rawText;
+    if (markdownParser) {
+      // --- Pre-processing for Markdown ---
+      let processedText = rawText;
 
-      formattedText = formattedText.replace(/^\[(User|AI)\]\s*/gim, "");
+      // Remove chat prefixes like [User] or [AI]
+      processedText = processedText.replace(/^\[(User|AI)\]\s*/gim, "");
 
-      formattedText = formattedText.replace(/([^\n])\s*(```)/g, "$1\n\n$2");
-      formattedText = formattedText.replace(/(```[^\n]*)\n{3,}/g, "$1\n\n");
-      formattedText = formattedText.replace(/(```\s*)\n{2,}([^\n])/g, "$1\n$2");
+      // Ensure code blocks are properly spaced
+      processedText = processedText.replace(/([^\n])\s*(```)/g, "$1\n\n$2");
+      processedText = processedText.replace(/(```[^\n]*)\n{3,}/g, "$1\n\n");
+      processedText = processedText.replace(/(```\s*)\n{2,}([^\n])/g, "$1\n$2");
 
-      let hasChanged = true;
-      let loopCount = 0;
-      while (hasChanged && loopCount < 10) {
-        hasChanged = false;
-        const newText = formattedText.replace(/(\|.*)\n{2,}(\s*\|)/g, "$1\n$2");
-        if (newText !== formattedText) {
-          formattedText = newText;
-          hasChanged = true;
+      // Fix table formatting iteratively
+      let hasTableChanged = true;
+      let iterations = 0;
+      while (hasTableChanged && iterations < 10) {
+        hasTableChanged = false;
+        const newText = processedText.replace(/(\|.*)\n{2,}(\s*\|)/g, "$1\n$2");
+        if (newText !== processedText) {
+          processedText = newText;
+          hasTableChanged = true;
         }
-        loopCount++;
+        iterations++;
       }
 
-      formattedText = formattedText.replace(
+      // Ensure tables have headers separator row
+      processedText = processedText.replace(
         /((?:\s*\|[^\n]+\|\s*\n?)+)/g,
-        function (tableBlock) {
+        (tableBlock) => {
           const lines = tableBlock
             .trim()
             .split("\n")
             .filter((l) => l.trim());
-
           if (lines.length < 2) return tableBlock;
 
           const secondLine = lines[1].trim();
-          const isSeparator = /^\|[\s\-:|]+\|$/.test(secondLine);
+          // Check if separator line exists (e.g. |---|---|)
+          if (/^\|[\s\-:|]+\|$/.test(secondLine)) return tableBlock;
 
-          if (isSeparator) return tableBlock;
-
+          // Generate separator line
           const firstLine = lines[0];
-          const pipeCount = (firstLine.match(/\|/g) || []).length;
-          const colCount = Math.max(1, pipeCount - 1);
+          const colCount = Math.max(
+            1,
+            (firstLine.match(/\|/g) || []).length - 1
+          );
           const separator = "|" + " --- |".repeat(colCount);
 
-          const newLines = [lines[0], separator, ...lines.slice(1)];
-          return "\n" + newLines.join("\n") + "\n";
+          return (
+            "\n" + [lines[0], separator, ...lines.slice(1)].join("\n") + "\n"
+          );
         }
       );
 
-      formattedText = formattedText.replace(/([^\n\|])\n(\|)/g, "$1\n\n$2");
-      formattedText = formattedText.replace(
-        /(\|[^\n]+)\n([^\|\n])/g,
-        "$1\n\n$2"
-      );
-
-      formattedText = formattedText.replace(/\n{3,}/g, "\n\n");
-
-      const protectedText = formattedText
+      // Escape LaTeX delimiters to prevent MD parser from eating them
+      const protectedText = processedText
         .replace(/\\\(/g, "\\\\(")
         .replace(/\\\)/g, "\\\\)")
         .replace(/\\\[/g, "\\\\[")
         .replace(/\\\]/g, "\\\\]");
 
-      contentHtml = md.render(protectedText);
+      renderedHtml = markdownParser.render(protectedText);
 
-      contentHtml = contentHtml.replace(/(<p>\s*<\/p>|<br\s*\/?>|\n)+$/gi, "");
-
-      contentHtml = contentHtml.replace(/(<br\s*\/?>\s*){3,}/gi, "<br><br>");
+      // Clean up excess newlines/breaks in generated HTML
+      renderedHtml = renderedHtml.replace(
+        /(<p>\s*<\/p>|<br\s*\/?>|\n)+$/gi,
+        ""
+      );
+      renderedHtml = renderedHtml.replace(/(<br\s*\/?>\s*){3,}/gi, "<br><br>");
     } else {
-      contentHtml = window.escapeHtml(rawText).replace(/\n/g, "<br>");
+      // Fallback: Simple text escaping
+      renderedHtml = window.escapeHtml(rawText).replace(/\n/g, "<br>");
     }
 
-    li.innerHTML = `
+    listItem.innerHTML = `
         <div class="transcript-header">
-            <div class="transcript-time">${time}</div>
+            <div class="transcript-time">${formattedTime}</div>
             <div class="transcript-actions">
                 <button class="button copy-btn" type="button" aria-label="${window.t(
                   "btn_copy"
@@ -194,15 +248,18 @@ window.displayTranscripts = (dataToDisplay) => {
             </div>
         </div>
         <div class="transcript-content-wrapper">
-            <div class="transcript-text">${contentHtml}</div>
+            <div class="transcript-text">${renderedHtml}</div>
         </div>
     `;
 
+    // Render Math (KaTeX) if available
+    // @ts-ignore
     if (window.renderMathInElement) {
       setTimeout(() => {
-        const textContainer = li.querySelector(".transcript-text");
+        const textContainer = listItem.querySelector(".transcript-text");
         if (textContainer) {
           try {
+            // @ts-ignore
             window.renderMathInElement(textContainer, {
               delimiters: [
                 { left: "$$", right: "$$", display: true },
@@ -213,103 +270,138 @@ window.displayTranscripts = (dataToDisplay) => {
               throwOnError: false,
             });
           } catch (e) {
-            console.warn("Math render error", e);
+            console.warn("[History] Math render warning:", e);
           }
         }
       }, 0);
     }
 
-    const copyBtn = li.querySelector(".copy-btn");
-    copyBtn.addEventListener("click", () => {
-      window.copyTranscriptText(rawText, copyBtn);
+    // Bind Copy Event
+    const copyButton = listItem.querySelector(".copy-btn");
+    copyButton?.addEventListener("click", () => {
+      // @ts-ignore
+      window.copyTranscriptText(rawText, copyButton);
     });
 
-    transcriptList.appendChild(li);
+    listContainer.appendChild(listItem);
   });
 };
 
-window.copyTranscriptText = (textToCopy, buttonElement) => {
+/**
+ * Copies text to clipboard and provides visual feedback on the button.
+ *
+ * @param {string} textToCopy - The content to copy.
+ * @param {HTMLButtonElement} buttonElement - The button that triggered the action.
+ */
+window.copyTranscriptText = async (textToCopy, buttonElement) => {
   const textSpan = buttonElement.querySelector(".copy-btn-text");
+
   if (!window.isApiReady()) {
     window.showToast(window.t("toast_error"), "error");
     return;
   }
-  window.pywebview.api
-    .copy_text(textToCopy)
-    .then(() => {
-      if (textSpan) textSpan.textContent = window.t("copied");
-      buttonElement.classList.add("copied");
-      buttonElement.disabled = true;
-      setTimeout(() => {
-        if (textSpan) textSpan.textContent = window.t("btn_copy");
-        buttonElement.classList.remove("copied");
-        buttonElement.disabled = false;
-      }, 2000);
-    })
-    .catch((err) => {
-      console.error("Copy error: ", err);
-      window.showToast(window.t("toast_error"), "error");
-    });
+
+  try {
+    await window.pywebview.api.copy_text(textToCopy);
+
+    // Success Feedback
+    if (textSpan) textSpan.textContent = window.t("copied");
+    buttonElement.classList.add("copied");
+    buttonElement.disabled = true;
+
+    // Revert after delay
+    setTimeout(() => {
+      if (textSpan) textSpan.textContent = window.t("btn_copy");
+      buttonElement.classList.remove("copied");
+      buttonElement.disabled = false;
+    }, 2000);
+  } catch (error) {
+    console.error("[History] Copy failed:", error);
+    window.showToast(window.t("toast_error"), "error");
+  }
 };
 
+/**
+ * Sorts the global buffer based on UI toggle and re-renders the list.
+ */
 window.sortAndDisplayTranscripts = () => {
   const sortToggle = document.getElementById("history-sort-toggle");
-  const sortOrder = sortToggle && sortToggle.checked ? "newest" : "oldest";
-  const sorted = [...allTranscripts].sort((a, b) => {
+  // @ts-ignore
+  const isNewestFirst = sortToggle && sortToggle.checked;
+
+  const sortedBuffer = [...transcriptHistoryBuffer].sort((a, b) => {
     const timeA = new Date(a.timestamp || 0).getTime();
     const timeB = new Date(b.timestamp || 0).getTime();
-    return sortOrder === "newest" ? timeB - timeA : timeA - timeB;
+    return isNewestFirst ? timeB - timeA : timeA - timeB;
   });
-  if (fuseInstance) {
-    fuseInstance.setCollection(sorted);
+
+  // Update Fuse index with sorted data
+  if (fuseSearchInstance) {
+    fuseSearchInstance.setCollection(sortedBuffer);
   }
-  allTranscripts = sorted;
+
+  transcriptHistoryBuffer = sortedBuffer;
   window.filterTranscripts();
 };
 
+/**
+ * Filters transcripts based on the search input value.
+ * Uses Fuse.js if available, otherwise simple string matching.
+ */
 window.filterTranscripts = () => {
   const searchInput = document.getElementById("search-transcript");
   if (!searchInput) return;
+
+  // @ts-ignore
   const searchText = searchInput.value.trim();
-  let filtered = [];
+  let filteredResults = [];
+
   if (!searchText) {
-    filtered = allTranscripts;
-  } else if (fuseInstance) {
-    const results = fuseInstance.search(searchText);
-    filtered = results.map((result) => result.item);
+    filteredResults = transcriptHistoryBuffer;
+  } else if (fuseSearchInstance) {
+    const results = fuseSearchInstance.search(searchText);
+    filteredResults = results.map((res) => res.item);
   } else {
-    const lowerSearch = searchText.toLowerCase();
-    filtered = allTranscripts.filter(
+    // Fallback: Simple case-insensitive includes
+    const searchLower = searchText.toLowerCase();
+    filteredResults = transcriptHistoryBuffer.filter(
       (item) =>
-        item && item.text && item.text.toLowerCase().includes(lowerSearch)
+        item && item.text && item.text.toLowerCase().includes(searchLower)
     );
   }
-  window.displayTranscripts(filtered);
+
+  window.displayTranscripts(filteredResults);
 };
 
+/**
+ * Triggers the deletion confirmation modal.
+ */
 window.confirmClearHistory = () => {
-  window.showConfirmModal(window.t("confirm_clear_history_text"), () => {
+  window.showConfirmModal(window.t("confirm_clear_history_text"), async () => {
     if (!window.isApiReady()) return;
-    window.pywebview.api
-      .delete_history()
-      .then((success) => {
-        if (success) {
-          allTranscripts = [];
-          if (fuseInstance) fuseInstance.setCollection([]);
-          const searchInput = document.getElementById("search-transcript");
-          if (searchInput) searchInput.value = "";
-          window.displayTranscripts([]);
-        } else {
-          window.showToast("Failed to delete history.", "error");
-        }
-      })
-      .catch((err) => {
-        console.error("Error deleting history:", err);
-        window.showToast("An error occurred.", "error");
-      });
+
+    try {
+      const success = await window.pywebview.api.delete_history();
+      if (success) {
+        transcriptHistoryBuffer = [];
+        if (fuseSearchInstance) fuseSearchInstance.setCollection([]);
+
+        const searchInput = document.getElementById("search-transcript");
+        // @ts-ignore
+        if (searchInput) searchInput.value = "";
+
+        window.displayTranscripts([]);
+      } else {
+        window.showToast("Failed to delete history.", "error");
+      }
+    } catch (error) {
+      console.error("[History] Delete failed:", error);
+      window.showToast("An error occurred.", "error");
+    }
   });
 };
 
+// Initialize search listener
 document.addEventListener("DOMContentLoaded", () => {
   const searchInput = document.getElementById("search-transcript");
   if (searchInput) {
