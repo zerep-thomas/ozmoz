@@ -256,6 +256,16 @@ window.populateLanguageDropdown = async () => {
     optionsContainer.appendChild(itemDiv);
   });
 
+  try {
+    const currentLang = await window.pywebview.api.get_current_language();
+    window._updateCustomSelectDisplay(
+      "custom-language-select-container",
+      currentLang || "en"
+    );
+  } catch (e) {
+    console.error("Erreur lors de la synchro initiale de la langue:", e);
+  }
+
   // Re-attach change listener to native select (clean way)
   const newSelect = nativeSelectElement.cloneNode(true);
   nativeSelectElement.parentNode.replaceChild(newSelect, nativeSelectElement);
