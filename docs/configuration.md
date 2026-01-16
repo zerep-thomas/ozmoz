@@ -1,38 +1,33 @@
-# ⚙️ Configuration Guide
+# Configuration Guide
 
-Ozmoz is a **hybrid** application. You can choose between maximum privacy with local models or maximum speed and intelligence with Cloud APIs.
+Ozmoz supports a hybrid configuration, allowing users to prioritize either data privacy (Local) or performance speed (Cloud).
+
+## 1. Transcription Engine Selection
+
+Select the engine that best fits your hardware capabilities and privacy requirements.
+
+| Feature     | Local Model (Whisper)        | Cloud API (Groq/Deepgram)  |
+| :---------- | :--------------------------- | :------------------------- |
+| **Privacy** | 100% Offline (On-Device)     | Data processed by provider |
+| **Latency** | Hardware Dependent (GPU/CPU) | Ultra-low (Sub-second)     |
+| **Cost**    | Free                         | Free tier / Pay-as-you-go  |
+| **Setup**   | ~1.8 GB Download             | API Key Required           |
 
 ---
 
-## 🏗️ Choose your Engine
+### Option A: Local Model (Offline)
 
-| Feature     | 🏠 Local Model (Whisper) | ☁️ Cloud APIs (Groq/Deepgram)           |
-| :---------- | :----------------------- | :-------------------------------------- |
-| **Privacy** | 100% Offline             | Data processed by provider              |
-| **Speed**   | Depends on your GPU/CPU  | Ultra-fast (Sub-second)                 |
-| **Cost**    | Completely Free          | Free tier available (API keys required) |
-| **Setup**   | 1.8 GB Download          | Simple API Key copy-paste               |
+_Recommended for privacy-conscious users._
 
----
-
-## 🏠 Option 1: Local Model (Offline)
-
-Ideal for users who prioritize privacy and don't want their voice data to leave their computer.
-
-### 1. Select the Model
-
-Open the **General Settings** and select **Whisper V3 Turbo** from the model dropdown menu.
+1.  Navigate to **Settings > General**.
+2.  In the Model dropdown, select **Whisper V3 Turbo**.
 
 <div align="center">
   <img src="images/app1.png" alt="Select Local Model" width="75%" style="border-radius: 8px; border: 1px solid #30363d;">
 </div>
 
-### 2. Initial Download
-
-Click the **Download** button. A progress bar will appear.
-
-> [!IMPORTANT]
-> The model is approximately **1.8 GB**. Ensure you have a stable connection. Once downloaded, Ozmoz will never need the internet again for transcription.
+3.  Click the **Download** button.
+    - **Note:** This process requires downloading approximately **1.8 GB** of model weights. Ensure a stable connection. Once completed, the model operates entirely offline.
 
 <div align="center">
   <img src="images/app2.png" alt="Download Progress" width="75%" style="border-radius: 8px; border: 1px solid #30363d;">
@@ -40,23 +35,16 @@ Click the **Download** button. A progress bar will appear.
 
 ---
 
-## ☁️ Option 2: Cloud APIs (High Performance)
+### Option B: Cloud APIs (High Performance)
 
-Ideal for ultra-low latency transcription and advanced LLM features (Screen Vision, Web Search).
+_Recommended for maximum speed and advanced capabilities._
 
-### 1. Obtain your API Keys
+1.  Obtain an API key from a supported provider:
+    - [Groq Cloud](https://groq.com/) (Recommended for LLM & Transcription)
+    - [Deepgram](https://deepgram.com/) (Specialized Speech-to-Text)
+2.  Navigate to **Settings > API Keys** and input your credentials.
 
-You can get free API keys from the following providers:
-
-- 🔑 **[Groq Cloud](https://groq.com/)** (Fastest LLM & Transcription)
-- 🔑 **[Cerebras AI](https://cerebras.ai/)** (High-speed inference)
-- 🔑 **[Deepgram](https://deepgram.com/)** (Alternative high-quality transcription)
-
-### 2. Secure Entry
-
-Go to **Settings > API Keys** and paste your keys into the respective fields.
-
-> [!TIP] > **Security Note:** Ozmoz automatically masks your keys (`********`) and stores them securely in your local environment.
+> **Security Note:** Ozmoz automatically masks your keys (`********`) and uses local encryption for storage. Keys are never transmitted.
 
 <div align="center">
   <img src="images/app3.png" alt="API Key Management" width="75%" style="border-radius: 8px; border: 1px solid #30363d;">
@@ -64,9 +52,9 @@ Go to **Settings > API Keys** and paste your keys into the respective fields.
 
 ---
 
-## 🚀 Ready to go!
+## 2. Operation
 
-Once configured, you can switch between models at any time using the main interface. You are now ready to use Ozmoz!
+Once configured, the main interface allows for rapid switching between models. You can verify the active status in the dashboard.
 
 <div align="center">
   <img src="images/app4.png" alt="Ozmoz Interface" width="75%" style="border-radius: 8px; border: 1px solid #30363d;">
