@@ -1,0 +1,187 @@
+[
+  {
+    "name": "openai/gpt-oss-120b",
+    "family": "gpt-oss-120b",
+    "provider": "groq",
+    "advantage": {
+      "en": "Web & Thinking",
+      "fr": "Web & Réflexion",
+      "es": "Web y Reflexión"
+    },
+    "tokens_per_minute": 7000
+  },
+  {
+    "name": "gpt-oss-120b",
+    "family": "gpt-oss-120b",
+    "provider": "cerebras",
+    "advantage": {
+      "en": "Web & Thinking",
+      "fr": "Web & Réflexion",
+      "es": "Web y Reflexión"
+    },
+    "tokens_per_minute": 50000
+  },
+  {
+    "name": "groq/compound",
+    "provider": "groq",
+    "advantage": {
+      "en": "Web & code",
+      "fr": "Web & code",
+      "es": "Web y Código"
+    },
+    "tokens_per_minute": 14000
+  },
+  {
+    "name": "llama-3.3-70b-versatile",
+    "family": "llama-3.3-70b",
+    "provider": "groq",
+    "advantage": {
+      "en": "Ingenious",
+      "fr": "Ingénieux",
+      "es": "Ingenioso"
+    },
+    "tokens_per_minute": 12000
+  },
+  {
+    "name": "llama-3.3-70b",
+    "family": "llama-3.3-70b",
+    "provider": "cerebras",
+    "advantage": {
+      "en": "Ingenious",
+      "fr": "Ingénieux",
+      "es": "Ingenioso"
+    },
+    "tokens_per_minute": 50000
+  },
+  {
+    "name": "moonshotai/kimi-k2-instruct-0905",
+    "provider": "groq",
+    "advantage": {
+      "en": "Versatile",
+      "fr": "Polyvalent",
+      "es": "Versátil"
+    },
+    "tokens_per_minute": 10000
+  },
+  {
+    "name": "qwen/qwen3-32b",
+    "family": "qwen-3-32b",
+    "provider": "groq",
+    "advantage": {
+      "en": "Thinking",
+      "fr": "Réflexion",
+      "es": "Reflexión"
+    },
+    "tokens_per_minute": 6000
+  },
+  {
+    "name": "qwen-3-32b",
+    "family": "qwen-3-32b",
+    "provider": "cerebras",
+    "advantage": {
+      "en": "Thinking",
+      "fr": "Réflexion",
+      "es": "Reflexión"
+    },
+    "tokens_per_minute": 50000
+  },
+  {
+    "name": "zai-glm-4.6",
+    "provider": "cerebras",
+    "advantage": {
+      "en": "Code",
+      "fr": "Code",
+      "es": "Código"
+    },
+    "tokens_per_minute": 50000
+  },
+  {
+    "name": "qwen-3-235b-a22b-instruct-2507",
+    "provider": "cerebras",
+    "advantage": {
+      "en": "Reasoning & Knowledge",
+      "fr": "Réflexion & Savoir",
+      "es": "Razonamiento y Saber"
+    },
+    "tokens_per_minute": 50000
+  },
+  {
+    "name": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "provider": "groq",
+    "advantage": {
+      "en": "Vision & Reasoning",
+      "fr": "Vision & Raisonnement",
+      "es": "Visión y Razonamiento"
+    },
+    "tokens_per_minute": 30000
+  },
+  {
+    "name": "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "provider": "groq",
+    "advantage": {
+      "en": "Vision & Efficiency",
+      "fr": "Vision & Efficacité",
+      "es": "Visión y Eficiencia"
+    },
+    "tokens_per_minute": 30000
+  },
+  {
+    "advanced_models": ["groq/compound", "groq/compound-mini", "zai-glm-4.6"]
+  },
+  {
+    "web_search_models": [
+      "groq/compound",
+      "gpt-oss-120b",
+      "openai/gpt-oss-120b"
+    ]
+  },
+  {
+    "screen_vision_models": [
+      "meta-llama/llama-4-maverick-17b-128e-instruct",
+      "meta-llama/llama-4-scout-17b-16e-instruct"
+    ]
+  },
+  {
+    "tool_models": ["openai/gpt-oss-120b", "gpt-oss-120b"]
+  },
+  {
+    "audio_models": [
+      {
+        "name": "whisper-large-v3-turbo",
+        "provider": "groq",
+        "advantage": {
+          "en": "Fast",
+          "fr": "Rapide",
+          "es": "Rápido"
+        }
+      },
+      {
+        "name": "whisper-large-v3",
+        "provider": "groq",
+        "advantage": {
+          "en": "Precise",
+          "fr": "Précis",
+          "es": "Preciso"
+        }
+      },
+      {
+        "name": "nova-2",
+        "provider": "deepgram",
+        "advantage": {
+          "en": "Versatile",
+          "fr": "Polyvalent",
+          "es": "Versátil"
+        }
+      },
+      {
+        "name": "nova-3",
+        "provider": "deepgram",
+        "advantage": {
+          "en": "Precise",
+          "fr": "Précis",
+          "es": "Preciso"
+        }
+      }
+    ]
+  }
+]
