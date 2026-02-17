@@ -1390,49 +1390,8 @@ class VisionManager:
         return file_path, base64_image
 
     def build_vision_system_prompt(self) -> str:
-        """
-        Construct the system prompt specialized for visual analysis.
-
-        The prompt is designed to:
-        - Set clear expectations for vision-based tasks
-        - Enforce output quality standards
-        - Match user's language automatically
-        - Use markdown formatting for readability
-
-        Returns:
-            System prompt string with current date and output rules.
-
-        Example:
-            >>> vision_mgr = VisionManager(...)
-            >>> prompt = vision_mgr.build_vision_system_prompt()
-            >>> # Returns prompt with current date and formatting rules
-        """
         date_str = datetime.now().strftime("%Y-%m-%d")
-
-        prompt = f"""# SYSTEM_ROLE
-    Visual Analysis Engine with Multimodal Understanding. Date: {date_str}.
-
-    # CAPABILITIES
-    - Image Analysis: Detect objects, read text (OCR), identify patterns, analyze layouts
-    - Visual Reasoning: Understand context, relationships, and implicit information
-    - Code Recognition: Read and explain code from screenshots
-    - Document Processing: Extract information from forms, tables, diagrams
-
-    # STRICT_OUTPUT_RULES
-    1. NO filler phrases ("I see", "The image shows", "As an AI", "Based on the image")
-    2. Direct answer ONLY - get straight to the point
-    3. Language: DETECT and MATCH the user's audio language perfectly
-    4. Format: Use Markdown for structure (headings, lists, code blocks)
-    5. Accuracy: If uncertain about visual details, acknowledge uncertainty
-    6. Privacy: Never identify real people by name from images
-
-    # OUTPUT_FORMAT
-    - For text extraction: Provide clean, formatted text
-    - For analysis: Lead with key findings, then supporting details
-    - For code: Use proper syntax highlighting in code blocks
-    - For tables: Preserve structure using markdown tables
-    """
-        return prompt
+        return f"""You are a helpful visual assistant. Today is {date_str}. Analyze the provided screenshot and answer the user's question. Respond in the same language as the user's message."""
 
     def generate_screen_vision_text(self) -> None:
         """
@@ -1739,33 +1698,13 @@ class WebSearchManager:
         self.generation_controller = generation_controller
 
     def build_web_search_system_prompt(self, selected_text: str) -> str:
-        """
-        Create a prompt specialized for web searching agents.
-
-        Args:
-            selected_text: User-selected context from clipboard.
-
-        Returns:
-            System prompt string with search instructions and context.
-        """
         date_str = datetime.now().strftime("%A, %B %d, %Y")
-
-        base_prompt = f"""# SYSTEM_ROLE
-Web Intelligence Engine. Date: {date_str}.
-
-# OPERATIONAL_MANDATES
-1. Response style: Information-dense, neutral, direct.
-2. CITATIONS: Mandatory. Use [Source](url) format at the bottom.
-3. NO META-TALK: Never say "I searched for", "Here is what I found".
-4. Language: STRICTLY match to user's input language.
-5. Format: Markdown.
-"""
-        context = base_prompt
+        prompt = f"You are a helpful research assistant with access to web search. Today is {date_str}. Respond in the same language as the user's message. Cite your sources."
 
         if selected_text:
-            context += f"\n<user_context_focus>\n{selected_text}\n</user_context_focus>"
+            prompt += f"\n\nContext provided by the user:\n{selected_text}"
 
-        return context
+        return prompt
 
     def select_best_web_model(self) -> str:
         """
@@ -2292,30 +2231,9 @@ class AIGenerationManager:
         return response
 
     def build_agent_system_prompt(self, agent: Dict[str, Any]) -> str:
-        """
-        Construct the system prompt based on agent configuration.
+        return f"""{agent['prompt']}
 
-        Args:
-            agent: Agent configuration dictionary.
-
-        Returns:
-            System prompt string with agent persona and instructions.
-        """
-        return f"""# AGENT_CORE
-Role: {agent['name']} (Specialized AI).
-Output_Mode: Direct Execution.
-
-# FORMATTING
-- Markdown enabled.
-- Math: Inline `$E=mc^2$`, Block `$$ ... $$`.
-
-# USER_DEFINED_INSTRUCTIONS
-{agent['prompt']}
-
-# GLOBAL_CONSTRAINTS
-- Language: Match user input.
-- No conversational filler.
-"""
+    Respond in the same language as the user's message."""
 
     def build_agent_user_prompt(self, instruction: str, context: Dict[str, Any]) -> str:
         """
@@ -2453,60 +2371,19 @@ Output_Mode: Direct Execution.
         return response
 
     def get_base_prompt(self) -> str:
-        """
-        Return the immutable core instructions.
-
-        Returns:
-            Base system prompt string.
-        """
-        return """# SYSTEM_CORE
-Role: Desktop Assistant & Text Processor.
-
-# IMMUTABLE_RULES
-1. NO FILLER: Ban phrases like "As an AI", "Sure", "Here is the text".
-2. EDITING: If user asks to modify text, output ONLY the result.
-3. LANGUAGE: Detect user input language and match it 100%.
-4. FORMAT: Markdown.
-"""
+        return """You are a helpful desktop assistant. Respond in the same language as the user's message. If asked to edit or rewrite text, output only the result without preamble."""
 
     def build_general_system_prompt(self, context: Dict[str, Any]) -> str:
-        """
-        Dynamically build the system prompt based on available context.
-
-        Args:
-            context: Context dictionary with image and text data.
-
-        Returns:
-            Complete system prompt with capabilities and context.
-        """
         date_str = datetime.now().strftime("%Y-%m-%d")
-        base_prompt = self.get_base_prompt()
-
-        # Add capabilities based on model type
-        if (
-            self.app_state.models.model in self.app_state.models.advanced_model_list
-            or self.app_state.models.model in self.app_state.models.tool_model_list
-        ):
-            base_prompt += "\n# CAPABILITIES\n- Web Search: Enabled (Cite sources).\n- Code: Enabled."
-
-        # Structured Context Injection using XML-like tags
-        context_string = f"\n# CURRENT_CONTEXT\nDate: {date_str}.\n"
+        prompt = f"You are a helpful desktop assistant. Today is {date_str}. Respond in the same language as the user's message."
 
         if context["image_data_url"]:
-            context_string += "[Input contains Image Data]\n"
+            prompt += " The user has also shared a screenshot."
 
         if context["selected_text"]:
-            # Strong demarcation to prevent model confusion
-            context_string += f"""
-<selected_content_to_process>
-{context['selected_text']}
-</selected_content_to_process>
-Instruction: Apply user request to the content above.
-"""
-        else:
-            context_string += "Mode: General Knowledge / Chat."
+            prompt += f"\n\nThe user has selected the following text:\n\n{context['selected_text']}\n\nApply their request to this content."
 
-        return base_prompt + context_string
+        return prompt
 
     def generate_ai_text(self) -> None:
         """

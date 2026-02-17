@@ -32,6 +32,16 @@
     "tokens_per_minute": 14000
   },
   {
+    "name": "groq/compound-mini",
+    "provider": "groq",
+    "advantage": {
+      "en": "Web & code",
+      "fr": "Web & code",
+      "es": "Web y Código"
+    },
+    "tokens_per_minute": 14000
+  },
+  {
     "name": "llama-3.3-70b-versatile",
     "family": "llama-3.3-70b",
     "provider": "groq",
@@ -41,17 +51,6 @@
       "es": "Ingenioso"
     },
     "tokens_per_minute": 12000
-  },
-  {
-    "name": "llama-3.3-70b",
-    "family": "llama-3.3-70b",
-    "provider": "cerebras",
-    "advantage": {
-      "en": "Ingenious",
-      "fr": "Ingénieux",
-      "es": "Ingenioso"
-    },
-    "tokens_per_minute": 50000
   },
   {
     "name": "moonshotai/kimi-k2-instruct-0905",
@@ -73,17 +72,6 @@
       "es": "Reflexión"
     },
     "tokens_per_minute": 6000
-  },
-  {
-    "name": "qwen-3-32b",
-    "family": "qwen-3-32b",
-    "provider": "cerebras",
-    "advantage": {
-      "en": "Thinking",
-      "fr": "Réflexion",
-      "es": "Reflexión"
-    },
-    "tokens_per_minute": 50000
   },
   {
     "name": "zai-glm-4.7",
@@ -116,7 +104,7 @@
     "tokens_per_minute": 30000
   },
   {
-    "advanced_models": ["groq/compound", "groq/compound-mini", "zai-glm-4.6"]
+    "advanced_models": ["groq/compound", "groq/compound-mini"]
   },
   {
     "web_search_models": [

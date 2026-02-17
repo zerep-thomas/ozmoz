@@ -681,6 +681,18 @@ select:focus,
 
 .internal-tab-content.active {
   display: block;
+  animation: tabSlideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes tabSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .internal-tab-content > .setting-item:last-child {
@@ -861,10 +873,6 @@ select:focus,
 
 .copy-btn:active {
   transform: scale(0.97);
-}
-
-.copy-btn.copied {
-  background-color: rgba(48, 209, 88, 0.2);
 }
 
 .copy-btn svg {
@@ -2683,7 +2691,6 @@ input[type="password"]::-ms-clear {
   margin: 10px 0;
   font-family: "Consolas", "Menlo", monospace;
   font-size: 13px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .transcript-text code {
@@ -2747,13 +2754,11 @@ input[type="password"]::-ms-clear {
 
 .model-delete-btn {
   margin-left: auto;
-  background: transparent !important; /* Force le fond transparent */
+  background: transparent !important;
   border: none;
   color: var(--color-text-tertiary);
   cursor: pointer;
-  /* On réduit le padding pour supprimer l'effet "carré" large */
   padding: 0;
-  /* On définit une petite zone fixe pour le clic sans créer de carré visible */
   width: 20px;
   height: 20px;
   display: flex;
@@ -2764,22 +2769,19 @@ input[type="password"]::-ms-clear {
 }
 
 .model-delete-btn:hover {
-  /* PAS de background-color ici pour éviter le carré gris */
   background: transparent !important;
-  color: var(--color-red); /* Seule l'icône devient rouge */
+  color: var(--color-red);
   opacity: 1;
 }
 
 .model-delete-btn svg {
-  /* Taille réduite (était souvent à 16px ou 24px) */
   width: 13px;
   height: 13px;
-  stroke-width: 2; /* On garde un trait visible malgré la petite taille */
+  stroke-width: 2;
 }
 
-/* Empêcher le clic sur le bouton de déclencher la sélection du parent */
 .select-items div {
-  padding-right: 8px; /* Un peu d'espace pour le bouton */
+  padding-right: 8px;
 }
 
 .custom-titlebar {
@@ -2790,7 +2792,7 @@ input[type="password"]::-ms-clear {
   background: #ffffff;
   border-bottom: 1px solid #e0e0e0;
   user-select: none;
-  -webkit-app-region: drag; /* Permet de déplacer la fenêtre */
+  -webkit-app-region: drag;
 }
 
 .titlebar-drag-region {
@@ -2806,7 +2808,7 @@ input[type="password"]::-ms-clear {
 
 .titlebar-controls {
   display: flex;
-  -webkit-app-region: no-drag; /* Les boutons ne doivent pas dragger */
+  -webkit-app-region: no-drag;
 }
 
 .titlebar-btn {
@@ -2828,4 +2830,177 @@ input[type="password"]::-ms-clear {
 .titlebar-btn.close:hover {
   background: #e81123;
   color: white;
+}
+
+/* Accordion update */
+.transcript-text blockquote {
+  border-left: 3px solid var(--color-accent);
+  margin: 8px 0;
+  padding: 6px 14px;
+  background-color: rgba(0, 0, 0, 0.04);
+  color: var(--color-text-secondary);
+  border-radius: 0 4px 4px 0;
+}
+
+.code-accordion {
+  position: relative;
+  background-color: #282c34;
+  border-radius: 8px;
+
+  margin: 4px 0 12px 0 !important;
+
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  cursor: text;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-top: -30px !important;
+  max-height: 44px;
+}
+
+/* Pointer cursor and elevation on hover */
+.code-accordion:hover {
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: rgba(156, 87, 247, 0.4);
+}
+
+/* Expanded state */
+.code-accordion.expanded {
+  max-height: 4000px;
+  cursor: text;
+}
+
+.code-header-ui {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 44px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Collapse / expand arrow */
+.code-arrow {
+  position: absolute;
+  top: 11px;
+  left: 10px;
+  width: 20px;
+  height: 20px;
+  color: #abb2bf;
+  transition:
+    transform 0.3s ease,
+    color 0.2s;
+}
+
+.code-accordion.expanded .code-arrow {
+  transform: rotate(90deg);
+}
+
+/* Controls group — copy button, anchored to the right */
+.code-controls {
+  position: absolute;
+  top: 11px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+/* Language badge — anchored to the left, after the arrow */
+.code-lang-badge {
+  position: absolute;
+  top: 11px;
+  left: 36px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #abb2bf;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 3px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+/* Copy button */
+.btn-copy-action {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  color: #abb2bf;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-copy-action:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.code-accordion pre {
+  padding: 10px 12px 10px 36px !important;
+  background: transparent !important;
+  font-family: "Consolas", "Menlo", monospace !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  color: #dcdfe4 !important;
+  overflow-x: auto;
+
+  white-space: pre;
+
+  margin-top: -30px;
+  margin-bottom: -40px;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #8891a0 !important;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag {
+  color: #c678dd !important;
+}
+
+.hljs-string,
+.hljs-number {
+  color: #98c379 !important;
+}
+
+.hljs-variable,
+.hljs-template-variable {
+  color: #e06c75 !important;
+}
+
+.code-accordion pre::-webkit-scrollbar {
+  height: 6px;
+}
+
+.code-accordion pre::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.code-accordion.static {
+  max-height: none !important;
+  cursor: text;
+}
+
+.code-accordion.static:hover {
+  box-shadow: none;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.code-accordion.static pre {
+  padding-left: 12px !important;
+}
+
+.code-accordion.static .code-lang-badge {
+  left: 12px;
 }

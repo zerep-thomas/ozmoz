@@ -117,7 +117,7 @@ window.locales = {
     no_transcripts: "Aucune transcription trouvée.",
     no_results: "Aucun résultat pour votre recherche.",
     btn_copy: "Copier",
-    copied: "Copié !",
+    copied: "Copié",
 
     // Replacements
     header_replacement: "Remplacement de mots",
@@ -176,7 +176,7 @@ window.locales = {
     btn_create_agent: "Créer l'agent",
     btn_save_changes: "Enregistrer les modifications",
 
-    toast_copied: "Copié !",
+    toast_copied: "Copié",
     toast_error: "Erreur",
     toast_success: "Succès",
 
@@ -337,7 +337,7 @@ window.locales = {
     no_transcripts: "No transcriptions found.",
     no_results: "No results for your search.",
     btn_copy: "Copy",
-    copied: "Copied!",
+    copied: "Copied",
 
     // Replacements
     header_replacement: "Word Replacement",
@@ -393,7 +393,7 @@ window.locales = {
     btn_create_agent: "Create Agent",
     btn_save_changes: "Save Changes",
 
-    toast_copied: "Copied!",
+    toast_copied: "Copied",
     toast_error: "Error",
     toast_success: "Success",
 
@@ -554,7 +554,7 @@ window.locales = {
     no_transcripts: "No se encontraron transcripciones.",
     no_results: "Sin resultados para su búsqueda.",
     btn_copy: "Copiar",
-    copied: "¡Copiado!",
+    copied: "Copiado",
 
     // Replacements
     header_replacement: "Reemplazo de palabras",
@@ -610,7 +610,7 @@ window.locales = {
     btn_create_agent: "Crear Agente",
     btn_save_changes: "Guardar Cambios",
 
-    toast_copied: "¡Copiado!",
+    toast_copied: "Copiado",
     toast_error: "Error",
     toast_success: "Éxito",
 
