@@ -93,49 +93,30 @@ FFmpeg is **not bundled** with the repository and must be installed separately.
 
 ## Acknowledgements
 
-This project stands on the shoulders of giants. We gratefully acknowledge the following open-source projects that make Ozmoz possible:
+Ozmoz stands on the shoulders of focused, high-quality open-source projects that make lightweight desktop AI integration possible.
 
-### Core & GUI
+### Core & Desktop Integration
 
-- [pywebview](https://pywebview.flowrl.com/) - A lightweight cross-platform wrapper to render the HTML/JS GUI.
-- [pystray](https://github.com/moses-palmer/pystray) - System tray icon and menu integration, replacing heavier frameworks for a minimal footprint.
-- [Pillow](https://python-pillow.org/) - Image processing library used for icon management and visual assets.
-- [python-dotenv](https://github.com/theskumar/python-dotenv) - Configuration management via environment variables.
+- **pywebview** – Lightweight bridge between Python and native WebView2, enabling a modern HTML interface without Electron-level overhead.
+- **pystray** – Minimal system tray integration with a tiny footprint.
+- **pywin32** – Low-level Windows API access for focus management and native interaction.
 
-### System Integration (Windows)
+### Speech & Audio Engine
 
-- [pywin32](https://github.com/mhammond/pywin32) - Essential low-level hooks for window management, focus control, and native clipboard access.
-- [pynput](https://github.com/moses-palmer/pynput) - Robust global hotkey monitoring (Press & Hold detection).
-- [keyboard](https://github.com/boppreh/keyboard) & [PyAutoGUI](https://github.com/asweigart/pyautogui) - Simulation of keystrokes for the "Auto-Paste" and smart selection features.
-- [pyperclip](https://github.com/asweigart/pyperclip) - Cross-platform clipboard text functions
-- [Keyring](https://github.com/jaraco/keyring) - Secure storage of API keys using the Windows Credential Locker.
-- [Cryptography](https://cryptography.io/en/latest/) - Fernet (AES) encryption implementation for securing local chat history at rest.
+- **faster-whisper** / **CTranslate2** – High-performance local Whisper inference optimized for CPU/GPU deployment.
+- **PyCaw** – Direct control of the Windows Core Audio API for smart muting automation.
+- **FFmpeg** – Universal audio processing backbone.
 
-### Audio & Processing
+### Vision & Interaction
 
-- [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper) / [CTranslate2](https://github.com/OpenNMT/CTranslate2) - The engine behind the local, offline speech recognition (Whisper V3 Turbo).
-- [PyAudio](https://people.csail.mit.edu/hubert/pyaudio/) - Low-latency microphone input stream handling.
-- [PyCaw](https://github.com/AndreMiras/pycaw) - Windows Core Audio API control for automatic system muting/unmuting.
-- [NumPy](https://numpy.org/) - High-performance scientific computing for audio buffer manipulation.
-- [Text-to-num](https://github.com/allo-media/text2num) - Post-processing utility to convert spoken numbers into digits.
-- [FFmpeg](https://github.com/FFmpeg/FFmpeg) - Universal audio backend for format conversion.
+- **python-mss** – Extremely fast screen capture used for multimodal Vision features.
+- **text2num** – Smart spoken-number normalization for accurate dictation output.
 
-### AI & Cloud Providers
+### AI Infrastructure
 
-- [Groq Python SDK](https://github.com/groq/groq-python) - Integration for LPU-accelerated inference (Llama 3, Whisper).
-- [Deepgram Python SDK](https://github.com/deepgram/deepgram-python-sdk) - Integration for Nova-2/Nova-3 speech models.
-- [Cerebras Cloud SDK](https://github.com/Cerebras/cerebras-cloud-sdk-python) - Integration for wafer-scale cluster inference.
-- [Requests](https://requests.readthedocs.io/) - HTTP library handling updates and file downloads.
-
-### Frontend & Visuals
-
-- [MSS](https://github.com/BoboTiG/python-mss) - Ultra-fast, cross-platform screen capture for Vision capabilities.
-- [Markdown-it](https://github.com/markdown-it/markdown-it) - Fast and compliant Markdown parsing for AI responses.
-- [KaTeX](https://katex.org/) - Professional typesetting library for rendering mathematical notation.
-- [Highlight.js](https://highlightjs.org/) - Syntax highlighting for generated code blocks.
-- [Chart.js](https://github.com/chartjs/Chart.js) - Data visualization for the user activity dashboard.
-- [Fuse.js](https://github.com/krisk/Fuse) - Powerful fuzzy-search implementation for logs and history filtering.
-- [Open Sauce Sans](https://github.com/marcologous/Open-Sauce-Fonts) - Main application typography (SIL Open Font License).
+- **Groq** – LPU-accelerated inference APIs.
+- **Deepgram** – Cloud speech models (Nova series).
+- **Cerebras** – Wafer-scale AI compute infrastructure.
 
 ## License
 

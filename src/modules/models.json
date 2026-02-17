@@ -86,22 +86,12 @@
     "tokens_per_minute": 50000
   },
   {
-    "name": "zai-glm-4.6",
+    "name": "zai-glm-4.7",
     "provider": "cerebras",
     "advantage": {
       "en": "Code",
       "fr": "Code",
       "es": "Código"
-    },
-    "tokens_per_minute": 50000
-  },
-  {
-    "name": "qwen-3-235b-a22b-instruct-2507",
-    "provider": "cerebras",
-    "advantage": {
-      "en": "Reasoning & Knowledge",
-      "fr": "Réflexion & Savoir",
-      "es": "Razonamiento y Saber"
     },
     "tokens_per_minute": 50000
   },
