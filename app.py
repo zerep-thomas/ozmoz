@@ -690,7 +690,7 @@ class OzmozApp:
             log_performance_step("Starting Webview loop (Blocking)")
 
             # This call blocks until all windows are closed
-            webview.start(debug=False)
+            webview.start(debug=True)
 
         except KeyboardInterrupt:
             logging.info("Shutdown requested via keyboard interrupt")
