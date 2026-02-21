@@ -15,7 +15,6 @@ __pycache__/
 # Ignore build and dist folders 
 build/
 dist/
-*.spec
 
 # Ignore binary files 
 bin/
