@@ -566,19 +566,12 @@ class OzmozApp:
             def on_settings_closing() -> bool:
                 """
                 Handle settings window close event.
-
-                Instead of destroying the window, we hide it to preserve
-                state and enable fast reopening.
-
-                Returns:
-                    True to allow closing during app shutdown,
-                    False to prevent destruction during normal operation.
                 """
                 if app_state.is_exiting:
-                    return True  # Allow destruction during shutdown
+                    return True
 
-                settings_window.hide()
-                return False  # Prevent destruction, just hide
+                app_state.ui.settings_window = None
+                return True
 
             settings_window.events.closing += on_settings_closing
             return settings_window
@@ -690,7 +683,7 @@ class OzmozApp:
             log_performance_step("Starting Webview loop (Blocking)")
 
             # This call blocks until all windows are closed
-            webview.start(debug=True)
+            webview.start(debug=False)
 
         except KeyboardInterrupt:
             logging.info("Shutdown requested via keyboard interrupt")

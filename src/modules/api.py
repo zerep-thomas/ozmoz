@@ -24,7 +24,6 @@ import requests
 import webview
 import win32con
 import win32gui
-from PySide6.QtWidgets import QApplication
 
 # --- Local Modules ---
 from modules.config import AppConfig, AppState
@@ -183,7 +182,8 @@ class API:
 
     def request_exit(self, icon: Any = None, item: Any = None) -> None:
         """
-        Cleanly exits the application (Qt + Webview), ensuring all threads and windows are closed.
+        Cleanly exits the application by destroying all windows.
+        This will unblock webview.start() in the main thread.
         """
         if self._app_state.is_exiting:
             return
@@ -191,18 +191,14 @@ class API:
 
         LOGGER.info("API: Requesting exit...")
 
-        if self._app_state.threading.stop_app_event:
+        if getattr(self._app_state.threading, "stop_app_event", None):
             self._app_state.threading.stop_app_event.set()
 
-        qt_app = QApplication.instance()
-        if qt_app:
-            qt_app.quit()
-
         try:
-            if self._app_state.ui.settings_window:
-                self._app_state.ui.settings_window.destroy()
-            if self._app_state.ui.window:
-                self._app_state.ui.window.destroy()
+            import webview
+
+            for window in list(webview.windows):
+                window.destroy()
         except Exception as error:
             LOGGER.error(f"API: Error destroying windows: {error}")
 
@@ -306,16 +302,19 @@ class API:
             except Exception:
                 self._app_state.ui.settings_window = None
 
-        LOGGER.info("API: Creating settings window...")
+        LOGGER.info("API: Creating settings window dynamically...")
         try:
 
             def on_closing() -> bool:
                 if self._app_state.is_exiting:
                     return True
-                if self._app_state.ui.settings_window:
-                    self._app_state.ui.settings_window.hide()
-                return False
+                self._app_state.ui.settings_window = None
+                import gc
 
+                gc.collect()
+                return True
+
+            # 1. On crée la fenêtre mais on la garde CACHÉE (hidden=True)
             new_window = webview.create_window(
                 "Ozmoz Settings",
                 html=self._ui_resource_loader.create_html(
@@ -331,19 +330,17 @@ class API:
                 background_color="#FFFFFF",
                 text_select=True,
                 transparent=False,
-                hidden=True,
+                hidden=True,  
             )
 
+            def on_loaded():
+                new_window.show()
+                self._window_manager.bring_to_foreground("Ozmoz Settings")
+
+            new_window.events.loaded += on_loaded
             new_window.events.closing += on_closing
+            
             self._app_state.ui.settings_window = new_window
-
-            def show_smoothly() -> None:
-                time.sleep(WINDOW_ANIMATION_DELAY)
-                if self._app_state.ui.settings_window:
-                    self._app_state.ui.settings_window.show()
-                    self._window_manager.bring_to_foreground("Ozmoz Settings")
-
-            threading.Thread(target=show_smoothly, daemon=True).start()
 
         except Exception:
             LOGGER.critical("API: Error creating settings window", exc_info=True)
@@ -1143,8 +1140,14 @@ class API:
             return {"success": False}
 
     def close_settings_window(self) -> Dict[str, bool]:
-        """Closes (hides) the settings window."""
+        """Closes and destroys the settings window to free RAM."""
         if self._app_state.ui.settings_window:
-            self._app_state.ui.settings_window.hide()
+            self._app_state.ui.settings_window.destroy()
+            self._app_state.ui.settings_window = None
+
+            import gc
+
+            gc.collect()
+
             return {"success": True}
         return {"success": False}

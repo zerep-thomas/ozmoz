@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" style="background-color: #ffffff">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -35,7 +35,7 @@
     ></script>
     <!-- Assurez-vous d'importer vos CSS ici si ce n'est pas fait dynamiquement -->
   </head>
-  <body>
+  <body style="background-color: #ffffff">
     <div class="container" id="container">
       <!-- Sidebar -->
       <nav class="sidebar">
@@ -576,63 +576,6 @@
                     Modifier
                   </button>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Hotkey Modal (Hidden) -->
-          <div
-            class="modal-backdrop hotkey-modal"
-            id="hotkey-modal-backdrop"
-            aria-hidden="true"
-            style="display: none"
-          >
-            <div
-              class="hotkey-capture-modal"
-              id="hotkey-modal-dialog"
-              role="dialog"
-              aria-modal="true"
-            >
-              <h3>
-                <span data-i18n="modal_hotkey_title"
-                  >Modifier le raccourci :</span
-                >
-                <span id="hotkey-action-name-display"></span>
-              </h3>
-              <p data-i18n="modal_hotkey_desc">
-                Appuyez sur la combinaison de touches souhaitée (ex: Ctrl+Alt+X)
-              </p>
-              <div
-                class="hotkey-display-area placeholder"
-                id="captured-hotkey-display"
-                data-i18n="modal_waiting"
-              >
-                En attente de saisie...
-              </div>
-              <div
-                id="hotkey-modal-feedback"
-                class="form-feedback"
-                style="display: none; margin-bottom: 16px"
-              ></div>
-              <input type="hidden" id="hotkey-modal-action-name" value="" />
-              <div class="hotkey-modal-buttons">
-                <button
-                  class="button"
-                  id="hotkey-modal-cancel-btn"
-                  style="justify-content: center"
-                  data-i18n="btn_cancel"
-                >
-                  Annuler
-                </button>
-                <button
-                  class="button primary"
-                  id="hotkey-modal-save-btn"
-                  style="justify-content: center"
-                  disabled
-                  data-i18n="btn_save"
-                >
-                  Enregistrer
-                </button>
               </div>
             </div>
           </div>
@@ -1408,6 +1351,61 @@
             data-i18n="btn_create_agent"
           >
             Créer l'agent
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hotkey Modal (Hidden) -->
+    <div
+      class="modal-backdrop hotkey-modal"
+      id="hotkey-modal-backdrop"
+      aria-hidden="true"
+      style="display: none"
+    >
+      <div
+        class="hotkey-capture-modal"
+        id="hotkey-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+      >
+        <h3>
+          <span data-i18n="modal_hotkey_title">Modifier le raccourci :</span>
+          <span id="hotkey-action-name-display"></span>
+        </h3>
+        <p data-i18n="modal_hotkey_desc">
+          Appuyez sur la combinaison de touches souhaitée (ex: Ctrl+Alt+X)
+        </p>
+        <div
+          class="hotkey-display-area placeholder"
+          id="captured-hotkey-display"
+          data-i18n="modal_waiting"
+        >
+          En attente de saisie...
+        </div>
+        <div
+          id="hotkey-modal-feedback"
+          class="form-feedback"
+          style="display: none; margin-bottom: 16px"
+        ></div>
+        <input type="hidden" id="hotkey-modal-action-name" value="" />
+        <div class="hotkey-modal-buttons">
+          <button
+            class="button"
+            id="hotkey-modal-cancel-btn"
+            style="justify-content: center"
+            data-i18n="btn_cancel"
+          >
+            Annuler
+          </button>
+          <button
+            class="button primary"
+            id="hotkey-modal-save-btn"
+            style="justify-content: center"
+            disabled
+            data-i18n="btn_save"
+          >
+            Enregistrer
           </button>
         </div>
       </div>

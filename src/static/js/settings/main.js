@@ -180,7 +180,11 @@ window.initApp = async () => {
   }
   const mainContainer = document.getElementById("container");
   if (mainContainer) {
-    mainContainer.classList.add("fade-in");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        mainContainer.classList.add("fade-in");
+      });
+    });
   }
 
   // Check Developer Mode Status

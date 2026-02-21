@@ -13,7 +13,6 @@ Key Components:
 
 import collections
 import logging
-import os
 import re
 import sys
 import threading
@@ -24,11 +23,6 @@ from typing import Any, Deque, Optional
 # --- Third-Party Imports ---
 import pyaudio
 import webview
-from PySide6.QtWidgets import QSystemTrayIcon
-
-# --- Environment Configuration ---
-# Suppress noisy Qt warnings about window management (non-critical debug spam)
-os.environ["QT_LOGGING_RULES"] = "qt.qpa.window=false"
 
 # --- Logger Setup ---
 logger = logging.getLogger(__name__)
@@ -187,7 +181,6 @@ class ThreadingState:
 class UIState:
     """User interface component references and display state."""
 
-    tray_icon_qt: Optional[QSystemTrayIcon] = None
     window: Optional[webview.Window] = None
     settings_window: Optional[webview.Window] = None
     settings_open: bool = False

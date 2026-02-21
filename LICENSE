@@ -248,17 +248,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 This software uses libraries licensed under the LGPL. These libraries are dynamically linked (or used via Python bindings) allowing the user to replace them with their own versions.
 
-A. PySide6 (Qt for Python)
-Licensed under the LGPL v3.
-Qt is a registered trademark of The Qt Company Ltd. and its subsidiaries.
-Source: https://www.qt.io/developers
-
-B. FFmpeg
+A. FFmpeg
 Licensed under the LGPL v2.1.
 FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
 Source: https://ffmpeg.org/download.html
 
-C. Pynput
+B. Pynput
 Licensed under the LGPL v3.
 Copyright (C) 2015-2022 Moses Palmer.
 Source: https://github.com/moses-palmer/pynput

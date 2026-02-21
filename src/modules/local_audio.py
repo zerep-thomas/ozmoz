@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 # --- Third-Party Imports ---
-import numpy as np
 import requests
 from faster_whisper import WhisperModel
 
@@ -580,6 +579,8 @@ class LocalWhisperManager:
 
         Note: Failures during warmup are non-critical and logged as warnings.
         """
+        import numpy as np
+
         if not self.model_instance:
             return
 

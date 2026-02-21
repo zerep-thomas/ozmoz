@@ -361,8 +361,7 @@ class ConfigManager:
             return
 
         try:
-            current_dir = Path(__file__).parent.resolve()
-            config_path = current_dir / "models.json"
+            config_path = Path(PathManager.get_resource_path("src/modules/models.json"))
 
             if config_path.exists():
                 with open(config_path, "r", encoding=DEFAULT_ENCODING) as f:

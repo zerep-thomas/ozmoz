@@ -199,7 +199,7 @@ window.locales = {
     model_incompatible_generic: "Modèle sélectionné incompatible.",
     missing_api_key_msg: "Clé API manquante pour <b>{provider}</b>.",
     loading: "Chargement...",
-    no_models: "Aucun modèle",
+    no_models: "Vous avez besoin d'entrer une clé API",
     error_loading: "Erreur",
 
     // --- Local Model Modal ---
@@ -415,7 +415,7 @@ window.locales = {
     model_incompatible_generic: "Incompatible model selected.",
     missing_api_key_msg: "Missing API Key for <b>{provider}</b>.",
     loading: "Loading...",
-    no_models: "No models",
+    no_models: "You need to enter an API key",
     error_loading: "Error",
 
     // --- Local Model Modal ---
@@ -632,7 +632,7 @@ window.locales = {
     model_incompatible_generic: "Modelo seleccionado incompatible.",
     missing_api_key_msg: "Falta la clave API para <b>{provider}</b>.",
     loading: "Cargando...",
-    no_models: "Sin modelos",
+    no_models: "Necesitas ingresar una clave API",
     error_loading: "Error",
 
     // --- Local Model Modal ---
