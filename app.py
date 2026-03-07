@@ -453,56 +453,7 @@ class OzmozApp:
             self.api.request_exit,
         )
 
-    def _execute_startup_sequence(self) -> None:
-        """
-        Execute background initialization tasks after UI is ready.
-
-        Runs in separate thread to avoid blocking the main UI loop.
-        Tasks include:
-        - Audio subsystem initialization and warmup
-        - Remote configuration fetching
-        - AI service warmup (reduces first-use latency)
-        - Restore previous settings window state
-
-        This is run after a delay to allow the UI to render first,
-        improving perceived startup performance.
-        """
-        try:
-            log_performance_step("Background: Initializing Audio & Sound...")
-
-            self.audio_manager.initialize()
-            self.sound_manager._initialize()
-            self.lifecycle_manager.run_background_startup_tasks()
-
-            # Warmup critical paths to reduce first-usage latency
-            # These operations load models/libraries into memory
-            self.audio_manager.warmup()
-            self.transcription_service.warmup()
-            self.generation_controller.warmup()
-
-            # Allow UI compositor to fully render before heavy checks
-            # This delay ensures the main window is visible before we
-            # potentially show the settings window on top
-            time.sleep(UI_SETTLE_DELAY_SECONDS)
-
-            # Restore settings window if it was open on last shutdown
-            if app_state.ui.settings_window:
-                logging.info("Restoring settings window from previous session")
-                app_state.ui.settings_window.show()
-                try:
-                    self.window_manager.bring_to_foreground("Ozmoz Settings")
-                except Exception as e:
-                    logging.warning(
-                        f"Failed to bring settings window to foreground: {e}"
-                    )
-
-        except Exception as e:
-            logging.error(
-                "Background startup sequence failed",
-                exc_info=True,
-                extra={"error": str(e)},
-            )
-            # Don't crash the app - background init failures are non-critical
+    time.sleep(UI_SETTLE_DELAY_SECONDS)
 
     def _create_main_window(self) -> Any:
         """
@@ -560,19 +511,25 @@ class OzmozApp:
                 background_color=WINDOW_BACKGROUND_COLOR,
                 text_select=True,
                 transparent=False,
-                hidden=True,  # Hidden by default, shown on user request
+                hidden=True,
             )
 
+            def on_settings_loaded():
+                """Show the window only once fully loaded, if startup requested it."""
+                if app_state.ui.show_settings_on_startup:
+                    settings_window.show()
+                    try:
+                        self.window_manager.bring_to_foreground("Ozmoz Settings")
+                    except Exception as e:
+                        logging.warning(f"Failed to bring settings window to foreground: {e}")
+
             def on_settings_closing() -> bool:
-                """
-                Handle settings window close event.
-                """
                 if app_state.is_exiting:
                     return True
-
                 app_state.ui.settings_window = None
                 return True
 
+            settings_window.events.loaded += on_settings_loaded
             settings_window.events.closing += on_settings_closing
             return settings_window
 
@@ -652,18 +609,11 @@ class OzmozApp:
             log_performance_step("Main Window created")
 
             # Create settings window (hidden initially)
+            app_state.ui.show_settings_on_startup = True  
             settings_window = self._create_settings_window()
             app_state.ui.settings_window = settings_window
 
             log_performance_step("Settings Window created")
-
-            # Start background initialization in separate thread
-            # This allows the UI to render while we warm up services
-            threading.Thread(
-                target=self._execute_startup_sequence,
-                daemon=True,
-                name="StartupSequence",
-            ).start()
 
             # Start system monitors
             self.power_monitor.start()

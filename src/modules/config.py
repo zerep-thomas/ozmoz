@@ -188,6 +188,7 @@ class UIState:
     index_html: Optional[str] = None
     chart_type: str = "line"
     dashboard_period: int = 7
+    show_settings_on_startup: bool = False
 
 
 @dataclass
