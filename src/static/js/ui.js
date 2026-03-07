@@ -249,10 +249,15 @@ function updateRenderedContent() {
 }
 
 /**
- * Finalizes the stream, clears intervals, and shows the Back button.
+ * Finalizes the stream: stops the render loop, performs the last markdown render,
+ * clears the sources section from any previous response, and shows the Back button.
  */
 function finalizeStreamedContent() {
   if (renderInterval) clearInterval(renderInterval);
+
+  // Remove any sources section from a previous response before rendering new content
+  const existingSources = document.getElementById("web-sources-container");
+  if (existingSources) existingSources.remove();
 
   fullStreamedResponse += "\n\n";
 
@@ -265,7 +270,6 @@ function finalizeStreamedContent() {
       .replace(/\\\[/g, "\\\\[")
       .replace(/\\\]/g, "\\\\]");
 
-    // Re-use MD configuration (could be extracted to a helper function)
     const md = window.markdownit({
       html: false,
       linkify: true,
@@ -277,9 +281,7 @@ function finalizeStreamedContent() {
             }</code></pre>`;
           } catch (__) {}
         }
-        return `<pre class="hljs"><code>${md.utils.escapeHtml(
-          str,
-        )}</code></pre>`;
+        return `<pre class="hljs"><code>${md.utils.escapeHtml(str)}</code></pre>`;
       },
     });
 
@@ -298,6 +300,7 @@ function finalizeStreamedContent() {
     }
   }
 
+  // Reveal the Back button with a smooth fade-in
   const backBtn = document.getElementById("back-btn");
   if (backBtn) {
     backBtn.style.display = "flex";
@@ -310,6 +313,81 @@ function finalizeStreamedContent() {
   setAIButtonState("success");
   resizeWindowBasedOnContent();
   disableDrag();
+}
+
+/**
+ * Renders web search sources below the AI response as clickable chips.
+ * Only called when the active model is a web search model (e.g. Groq Compound).
+ * Sources are sorted by relevance score and capped at 5 entries.
+ *
+ * @param {Array<{title: string, url: string, score: number}>} sources
+ */
+function displayWebSources(sources) {
+  if (!sources || sources.length === 0) return;
+
+  const responseContainer = document.getElementById("ai-response-container");
+  if (!responseContainer) return;
+
+  // Remove any leftover sources section from a previous response
+  const existing = document.getElementById("web-sources-container");
+  if (existing) existing.remove();
+
+  // --- Build the sources section ---
+  const wrapper = document.createElement("div");
+  wrapper.id = "web-sources-container";
+  wrapper.className = "web-sources-container";
+
+  const label = document.createElement("span");
+  label.className = "web-sources-label";
+  label.textContent = "Sources";
+  wrapper.appendChild(label);
+
+  const list = document.createElement("div");
+  list.className = "web-sources-list";
+
+  // Sort by descending score, keep the top 5 most relevant results
+  const topSources = [...sources].sort((a, b) => b.score - a.score).slice(0, 5);
+
+  topSources.forEach((source) => {
+    const chip = document.createElement("button");
+    chip.className = "web-source-chip";
+
+    // Favicon fetched from Google's public favicon service
+    const favicon = document.createElement("img");
+    favicon.className = "web-source-favicon";
+    try {
+      const hostname = new URL(source.url).hostname;
+      favicon.src = `https://www.google.com/s2/favicons?domain=${hostname}&sz=16`;
+    } catch (_) {
+      // Malformed URL — hide favicon gracefully
+      favicon.style.display = "none";
+    }
+    favicon.onerror = () => (favicon.style.display = "none");
+
+    // Truncate long titles to keep chips compact
+    const title = document.createElement("span");
+    title.className = "web-source-title";
+    title.textContent =
+      source.title.length > 32
+        ? source.title.substring(0, 32) + "…"
+        : source.title;
+
+    chip.appendChild(favicon);
+    chip.appendChild(title);
+
+    // Open URL in the system default browser via the Python API bridge
+    chip.addEventListener("click", () => {
+      API.openExternalLink(source.url);
+    });
+
+    list.appendChild(chip);
+  });
+
+  wrapper.appendChild(list);
+  responseContainer.appendChild(wrapper);
+
+  // Recalculate window height to accommodate the new sources section
+  resizeWindowBasedOnContent();
 }
 
 /**

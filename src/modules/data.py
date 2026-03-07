@@ -372,7 +372,7 @@ class ConfigManager:
                 for item in data:
                     for json_key, app_attr in self.MODEL_LIST_KEYS.items():
                         if json_key in item:
-                            setattr(app_state, app_attr, item[json_key])
+                            setattr(app_state.models, app_attr, item[json_key])
 
                 logger.info("local_models_config_loaded")
             else:
@@ -382,11 +382,16 @@ class ConfigManager:
         except Exception as error:
             logger.error("config_loading_error", extra={"error": str(error)})
             for app_attr in self.MODEL_LIST_KEYS.values():
-                setattr(app_state, app_attr, [])
+                setattr(app_state.models, app_attr, [])
 
     def fetch_ai_models(self) -> List[str]:
         """
-        Returns a list of available and enabled model IDs.
+        Returns a list of available and enabled model IDs based on the user's
+        API keys. Only models whose provider key is present are included.
+
+        Models defined as capability lists (web_search_models, tool_models, etc.)
+        are excluded from this list — they are loaded separately via
+        load_and_parse_remote_config() into app_state model lists.
         """
         if app_state.models.cached_models:
             return app_state.models.cached_models
@@ -404,7 +409,14 @@ class ConfigManager:
             selected_models_map: Dict[str, Dict] = {}
 
             for item in app_state.cached_remote_config:
-                if "name" not in item or not isinstance(item.get("advantage"), dict):
+                # Skip capability list entries (web_search_models, tool_models, etc.)
+                # and audio_models blocks — these are not callable AI text models.
+                if "name" not in item:
+                    continue
+
+                # Only process proper model entries that have a translated advantage dict.
+                # Entries without it are metadata blocks, not usable models.
+                if not isinstance(item.get("advantage"), dict):
                     continue
 
                 provider = item.get("provider", "groq")
@@ -417,7 +429,8 @@ class ConfigManager:
                 if not is_key_present:
                     continue
 
-                # Priority Logic: Prefer Cerebras if available
+                # Priority logic: prefer Cerebras over Groq for the same model family
+                # (Cerebras typically offers higher throughput for supported models)
                 if family not in selected_models_map:
                     selected_models_map[family] = item
                 else:
@@ -427,6 +440,8 @@ class ConfigManager:
 
             valid_models = [item["name"] for item in selected_models_map.values()]
             app_state.models.cached_models = valid_models
+
+            logger.info(f"Available models resolved: {valid_models}")
             return valid_models
 
         except Exception as error:
