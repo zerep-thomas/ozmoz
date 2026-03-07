@@ -2242,13 +2242,13 @@ body:has(.modal-backdrop.visible) .container {
   display: none !important;
 }
 
-li:has(> p) {
-  display: flex;
-  align-items: baseline;
+li > p:first-child {
+  margin-top: 0;
+  margin-bottom: 8px;
 }
 
-li:has(> p) > p {
-  margin-block-start: 0;
+li {
+  display: block;
 }
 
 .model-feature-badge {
@@ -2860,13 +2860,12 @@ input[type="password"]::-ms-clear {
   background-color: #282c34;
   border-radius: 8px;
 
-  margin: 4px 0 12px 0 !important;
+  margin: 8px 0 12px 0 !important;
 
   border: 1px solid rgba(0, 0, 0, 0.1);
   cursor: text;
   overflow: hidden;
   transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  margin-top: -30px !important;
   max-height: 44px;
 }
 
