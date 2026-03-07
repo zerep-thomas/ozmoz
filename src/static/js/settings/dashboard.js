@@ -172,9 +172,18 @@ function renderActivityChart(
   });
 
   const originalValues = dates.map((date) => data[date]);
-  const values = originalValues.map((v, i) => {
+
+  // Moyenne mobile sur 3 points pour lisser les pics abrupts
+  const smoothedValues = originalValues.map((v, i) => {
+    const prev = originalValues[i - 1] ?? v;
+    const next = originalValues[i + 1] ?? v;
+    return (prev + v + next) / 3;
+  });
+
+  // Transformation sqrt sur les valeurs lissées pour réduire l'amplitude des pics
+  const values = smoothedValues.map((v, i) => {
     if (v > 0) return Math.sqrt(v);
-    if (i === 0 || i === originalValues.length - 1) return 0;
+    if (i === 0 || i === smoothedValues.length - 1) return 0;
     return null;
   });
 
@@ -187,14 +196,12 @@ function renderActivityChart(
   gradient.addColorStop(0, "rgba(156, 87, 247, 0.5)");
   gradient.addColorStop(1, "rgba(156, 87, 247, 0)");
 
-  // Destroy previous instance to avoid canvas stacking and ensure type update
   if (window.myActivityChart) {
     window.myActivityChart.destroy();
   }
 
   const initialData = values.map(() => 0);
 
-  // Configure dataset appearance based on chart type
   const isLine = chartType === "line";
   const backgroundColor = isLine ? gradient : "rgba(156, 87, 247, 0.65)";
   const borderRadius = isLine ? 0 : 4;
@@ -208,7 +215,7 @@ function renderActivityChart(
         {
           label: window.t("chart_label_words"),
           data: initialData,
-          fill: isLine, // Fill only for line charts
+          fill: isLine,
           borderColor: "#9c57f7",
           borderWidth: 2,
           backgroundColor: backgroundColor,
@@ -220,8 +227,8 @@ function renderActivityChart(
           pointHoverBackgroundColor: "#ffffff",
           pointHoverBorderColor: "#9c57f7",
           pointHoverBorderWidth: 2,
-          tension: 0.5,
-          cubicInterpolationMode: "default",
+          tension: 0.6,
+          cubicInterpolationMode: "monotone",
           borderCapStyle: "round",
           borderJoinStyle: "round",
           borderRadius: borderRadius,
@@ -272,15 +279,11 @@ function renderActivityChart(
           bodyFont: { family: "OpenSauceSans", size: 13, weight: "500" },
           callbacks: {
             label: function (context) {
+              // Affiche toujours la valeur originale (non lissée) dans le tooltip
               const originalValue = originalValues[context.dataIndex];
               let label = context.dataset.label || "";
-
-              if (label) {
-                label += ": ";
-              }
-              if (originalValue !== null) {
-                label += originalValue;
-              }
+              if (label) label += ": ";
+              if (originalValue !== null) label += originalValue;
               return label;
             },
           },
