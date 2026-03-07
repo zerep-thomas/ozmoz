@@ -173,19 +173,35 @@ function renderActivityChart(
 
   const originalValues = dates.map((date) => data[date]);
 
-  // Moyenne mobile sur 3 points pour lisser les pics abrupts
-  const smoothedValues = originalValues.map((v, i) => {
-    const prev = originalValues[i - 1] ?? v;
-    const next = originalValues[i + 1] ?? v;
-    return (prev + v + next) / 3;
-  });
+  const isLine = chartType === "line";
 
-  // Transformation sqrt sur les valeurs lissées pour réduire l'amplitude des pics
-  const values = smoothedValues.map((v, i) => {
-    if (v > 0) return Math.sqrt(v);
-    if (i === 0 || i === smoothedValues.length - 1) return 0;
-    return null;
-  });
+  let values;
+
+  if (isLine) {
+    const logValues = originalValues.map((v) => (v > 0 ? Math.log1p(v) : null));
+
+    values = logValues.map((v, i) => {
+      if (v !== null) return v;
+
+      let left = null,
+        leftIdx = i - 1;
+      while (leftIdx >= 0 && logValues[leftIdx] === null) leftIdx--;
+      if (leftIdx >= 0) left = logValues[leftIdx];
+
+      let right = null,
+        rightIdx = i + 1;
+      while (rightIdx < logValues.length && logValues[rightIdx] === null)
+        rightIdx++;
+      if (rightIdx < logValues.length) right = logValues[rightIdx];
+
+      if (left !== null && right !== null) return (left + right) / 2;
+      if (left !== null) return left;
+      if (right !== null) return right;
+      return 0;
+    });
+  } else {
+    values = originalValues;
+  }
 
   const gradient = ctx.createLinearGradient(
     0,
@@ -202,7 +218,6 @@ function renderActivityChart(
 
   const initialData = values.map(() => 0);
 
-  const isLine = chartType === "line";
   const backgroundColor = isLine ? gradient : "rgba(156, 87, 247, 0.65)";
   const borderRadius = isLine ? 0 : 4;
   const hoverRadius = isLine ? 6 : 0;
@@ -227,7 +242,7 @@ function renderActivityChart(
           pointHoverBackgroundColor: "#ffffff",
           pointHoverBorderColor: "#9c57f7",
           pointHoverBorderWidth: 2,
-          tension: 0.6,
+          tension: 0,
           cubicInterpolationMode: "monotone",
           borderCapStyle: "round",
           borderJoinStyle: "round",
@@ -279,7 +294,6 @@ function renderActivityChart(
           bodyFont: { family: "OpenSauceSans", size: 13, weight: "500" },
           callbacks: {
             label: function (context) {
-              // Affiche toujours la valeur originale (non lissée) dans le tooltip
               const originalValue = originalValues[context.dataIndex];
               let label = context.dataset.label || "";
               if (label) label += ": ";
