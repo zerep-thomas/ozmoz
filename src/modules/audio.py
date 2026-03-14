@@ -353,75 +353,6 @@ class AudioManager:
             finally:
                 self._pyaudio_instance = None
 
-    def start_recording(
-        self, on_silence_callback: SimpleCallback | None = None
-    ) -> None:
-        """
-        Start the audio recording process with immediate UI feedback.
-
-        Args:
-            on_silence_callback: Optional callback to execute when silence is detected.
-
-        Note:
-            This method returns immediately - actual recording happens in a background thread.
-        """
-
-        def update_ui_in_background() -> None:
-            """Update UI elements to reflect recording state."""
-            if self.app_state.ui.window:
-                try:
-                    SafeJSExecutor.call_function(
-                        self.app_state.ui.window, "setSettingsButtonState", True
-                    )
-                    # CORRECTION ICI - Utiliser evaluate_js directement pour les événements personnalisés
-                    safe_detail = json.dumps("start_recording")
-                    self.app_state.ui.window.evaluate_js(
-                        f"window.dispatchEvent(new CustomEvent('pywebview', {{ detail: {safe_detail} }}))"
-                    )
-                except Exception as error:
-                    self._logger.warning(
-                        "UI update failed", extra={"error": str(error)}
-                    )
-
-        threading.Thread(target=update_ui_in_background, daemon=True).start()
-
-        # Play start beep if sounds enabled
-        if self.app_state.audio.sound_enabled:
-            self.sound_manager.play("beep_on")
-
-        # Store mute state and apply if configured
-        self.app_state.audio.was_muted_during_recording = (
-            self.app_state.audio.mute_sound
-        )
-        if self.app_state.audio.mute_sound:
-            threading.Thread(target=self._delayed_mute, daemon=True).start()
-
-        # Ensure PyAudio is initialized
-        if not self.app_state.audio.pyaudio_instance:
-            try:
-                if not self.initialize():
-                    return
-            except AudioInitializationError:
-                return
-
-        # Update state flags
-        self.app_state.is_busy = True
-        self.app_state.audio.is_recording = True
-        self.app_state.audio.recording_start_time = time.time()
-        self._silence_callback = on_silence_callback
-
-        # Generate secure temporary file path
-        temp_path = self._generate_temp_audio_path()
-        self.app_state.audio.current_recording_path = str(temp_path)
-
-        # Start recording worker thread
-        threading.Thread(
-            target=self._record_audio_worker,
-            args=(str(temp_path),),
-            daemon=True,
-            name="AudioRecorder",
-        ).start()
-
     def stop_recording(self) -> None:
         """
         Stop the recording and restore system volume.
@@ -468,26 +399,22 @@ class AudioManager:
         time.sleep(PRE_MUTE_DELAY_SECONDS)
         self.mute_system_volume()
 
-    def _record_audio_worker(self, filename: str) -> None:
+    def _record_audio_worker(self, filename: str, stream_ready_event: threading.Event | None = None) -> None:
         """
-        Background worker that captures audio frames from microphone.
-
-        Args:
-            filename: Path where the WAV file will be saved.
-
-        Note:
-            This runs in a daemon thread and terminates when
-            app_state.audio.is_recording becomes False.
+        Background worker that captures audio frames from the microphone.
+        Signals the stream_ready_event once the hardware stream is actively listening
+        to prevent audio truncation during the initial startup phase.
         """
-        frames: list[bytes] = []
+        frames: list[bytes] =[]
         stream: pyaudio.Stream | None = None
 
         if self._pyaudio_instance is None:
             self._logger.error("PyAudio not initialized - cannot start recording")
             self.app_state.audio.is_recording = False
+            if stream_ready_event:
+                stream_ready_event.set()
             return
 
-        # Open audio stream
         try:
             stream = self._pyaudio_instance.open(
                 format=AppConfig.AUDIO_FORMAT,
@@ -499,64 +426,104 @@ class AudioManager:
             self._audio_stream = stream
             self._logger.info("Audio stream opened successfully")
 
+            # Signal that the hardware is actively listening
+            if stream_ready_event:
+                stream_ready_event.set()
+
         except OSError as error:
-            self._logger.error(
-                "Failed to open audio stream",
-                extra={"error": str(error)},
-                exc_info=True,
-            )
+            self._logger.error("Failed to open audio stream", extra={"error": str(error)}, exc_info=True)
             self.app_state.audio.is_recording = False
+            if stream_ready_event:
+                stream_ready_event.set()
             return
 
         viz_enabled = True
         window = self.app_state.ui.window
 
-        # Recording loop
         try:
             while self.app_state.audio.is_recording:
                 try:
-                    data = stream.read(
-                        AppConfig.AUDIO_CHUNK, exception_on_overflow=False
-                    )
+                    data = stream.read(AppConfig.AUDIO_CHUNK, exception_on_overflow=False)
                     frames.append(data)
 
-                    # Update real-time visualizer UI
                     if viz_enabled and window:
                         try:
                             self._update_visualizer(window, data)
                         except Exception as error:
-                            self._logger.warning(
-                                "Visualizer update failed - disabling",
-                                extra={"error": str(error)},
-                            )
+                            self._logger.warning("Visualizer update failed - disabling", extra={"error": str(error)})
                             viz_enabled = False
 
                 except OSError as error:
-                    self._logger.warning(
-                        "Audio stream read error",
-                        extra={"error": str(error)},
-                    )
+                    self._logger.warning("Audio stream read error", extra={"error": str(error)})
                     break
 
         finally:
-            # Cleanup stream
             if stream:
                 try:
                     stream.stop_stream()
                     stream.close()
                     self._logger.debug("Audio stream cleaned up")
                 except Exception as error:
-                    self._logger.warning(
-                        "Error during stream cleanup", extra={"error": str(error)}
-                    )
+                    self._logger.warning("Error during stream cleanup", extra={"error": str(error)})
                 finally:
                     self._audio_stream = None
 
-            # Write frames to WAV file
             if frames:
                 self._write_wav_file(filename, frames)
             else:
                 self._logger.warning("No audio frames captured")
+
+    def start_recording(self, on_silence_callback: SimpleCallback | None = None) -> None:
+        """
+        Starts the audio recording process.
+        Ensures the hardware is fully initialized before triggering UI and audio feedback.
+        """
+        if not self.app_state.audio.pyaudio_instance:
+            try:
+                if not self.initialize():
+                    return
+            except AudioInitializationError:
+                return
+
+        self.app_state.is_busy = True
+        self.app_state.audio.is_recording = True
+        self.app_state.audio.recording_start_time = time.time()
+        self._silence_callback = on_silence_callback
+
+        temp_path = self._generate_temp_audio_path()
+        self.app_state.audio.current_recording_path = str(temp_path)
+
+        stream_ready_event = threading.Event()
+
+        threading.Thread(
+            target=self._record_audio_worker,
+            args=(str(temp_path), stream_ready_event),
+            daemon=True,
+            name="AudioRecorder",
+        ).start()
+
+        def synchronization_worker() -> None:
+            """Waits for hardware readiness before providing user feedback."""
+            stream_ready_event.wait(timeout=2.0)
+
+            if self.app_state.ui.window:
+                try:
+                    SafeJSExecutor.call_function(self.app_state.ui.window, "setSettingsButtonState", True)
+                    safe_detail = json.dumps("start_recording")
+                    self.app_state.ui.window.evaluate_js(
+                        f"window.dispatchEvent(new CustomEvent('pywebview', {{ detail: {safe_detail} }}))"
+                    )
+                except Exception as error:
+                    self._logger.warning("UI update failed", extra={"error": str(error)})
+
+            if self.app_state.audio.sound_enabled:
+                self.sound_manager.play("beep_on")
+
+            self.app_state.audio.was_muted_during_recording = self.app_state.audio.mute_sound
+            if self.app_state.audio.mute_sound:
+                threading.Thread(target=self._delayed_mute, daemon=True).start()
+
+        threading.Thread(target=synchronization_worker, daemon=True, name="RecFeedback").start()
 
     def _update_visualizer(self, window: WindowProtocol, audio_data: bytes) -> None:
         """
@@ -756,18 +723,18 @@ class TranscriptionService:
 
     def apply_replacements(self, text: str) -> str:
         """
-        Apply user-defined text replacements.
+        Apply user-defined text replacements with advanced matching.
+        
+        Features:
+        - Case-insensitive matching.
+        - Preserves adjacent punctuation.
+        - Fuzzy matching to tolerate minor typos from the STT engine.
 
         Args:
             text: Input text to process.
 
         Returns:
             Text with all configured replacements applied.
-
-        Example:
-            >>> # User configured: "ozmoz" -> "Ozmoz"
-            >>> service.apply_replacements("I use ozmoz daily")
-            'I use Ozmoz daily'
         """
         if not text:
             return ""
@@ -775,10 +742,37 @@ class TranscriptionService:
         try:
             replacements = self.replacement_manager.load()
             for item in replacements:
-                word1 = item.get("word1")
-                word2 = item.get("word2")
-                if word1 and word2:
-                    text = text.replace(word1, word2)
+                word1 = item.get("word1", "")
+                word2 = item.get("word2", "")
+                
+                if not word1 or not word2:
+                    continue
+                    
+                word1 = str(word1).strip()
+                word2 = str(word2)
+                
+                if not word1:
+                    continue
+
+                # 1. Exact Match via Regex (Case-insensitive, boundary-aware)
+                # Escape word1 to safely handle literal symbols (e.g., '+', '?')
+                escaped_word1 = re.escape(word1)
+                
+                # Apply word boundaries only if the string starts/ends with alphanumeric characters
+                prefix = r'\b' if word1[0].isalnum() else ''
+                suffix = r'\b' if word1[-1].isalnum() else ''
+                pattern = f"(?i){prefix}{escaped_word1}{suffix}"
+                
+                try:
+                    text = re.sub(pattern, word2, text)
+                except re.error:
+                    pass  # Fallback gracefully if regex compilation fails
+
+                # 2. Fuzzy Match (Tolerates minor typos and internal spacing differences)
+                # Only run fuzzy matching if the target contains actual words
+                if re.search(r'\w', word1):
+                    text = self._apply_fuzzy_replacement(text, word1, word2)
+
             return text
 
         except Exception as error:
@@ -787,6 +781,69 @@ class TranscriptionService:
                 extra={"error": str(error)},
             )
             return text
+
+    def _apply_fuzzy_replacement(self, text: str, word1: str, word2: str) -> str:
+        """
+        Applies a fuzzy replacement using a sliding window of words to detect
+        minor typographical errors (e.g., 'emial' instead of 'email').
+        """
+        import difflib
+        
+        # Tokenize target into pure lowercase words
+        target_words =[w.lower() for w in re.split(r'\W+', word1) if w]
+        if not target_words:
+            return text
+            
+        n_target = len(target_words)
+        target_str = " ".join(target_words)
+        
+        # Dynamic strictness based on string length to prevent false positives on short words
+        min_ratio = 1.0
+        if len(target_str) > 5:
+            min_ratio = 0.80  # Highly flexible for long phrases
+        elif len(target_str) > 3:
+            min_ratio = 0.75  # Allows a 1-character typo on medium words
+            
+        if min_ratio == 1.0:
+            return text  # Abort fuzzy matching on very short words (<= 3 chars)
+            
+        # Tokenize the input text, keeping punctuation and spaces as explicit, separate tokens
+        tokens = re.split(r'(\W+)', text)
+        
+        # Find indices of tokens that are actual words (alphanumeric)
+        word_indices =[i for i, token in enumerate(tokens) if re.match(r'^\w+$', token)]
+        
+        if len(word_indices) < n_target:
+            return text
+            
+        i = 0
+        while i <= len(word_indices) - n_target:
+            # Extract the current sequence of words matching the target length
+            window_indices = word_indices[i:i + n_target]
+            window_words = [tokens[idx].lower() for idx in window_indices]
+            window_str = " ".join(window_words)
+            
+            # Calculate mathematical similarity (0.0 to 1.0)
+            similarity = difflib.SequenceMatcher(None, window_str, target_str).ratio()
+            
+            if similarity >= min_ratio:
+                start_idx = window_indices[0]
+                end_idx = window_indices[-1]
+                
+                # Replace the first word token with the target replacement
+                tokens[start_idx] = word2
+                
+                # Clear the subsequent tokens (including internal delimiters) covered by the match
+                # This perfectly preserves the adjacent trailing/leading punctuation
+                for j in range(start_idx + 1, end_idx + 1):
+                    tokens[j] = ""
+                
+                i += n_target  # Skip the replaced sequence
+            else:
+                i += 1
+                
+        # Reconstruct the string
+        return "".join(tokens)
 
     def convert_numbers(self, transcript: str, language: str) -> str:
         """

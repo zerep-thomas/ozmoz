@@ -302,11 +302,20 @@ class OzmozApp:
         self.ui_resource_loader = UIResourceLoader(app_state)
 
     def _initialize_system_adapters(self) -> None:
-        """Initialize OS-level adapters for window and audio management."""
+        """
+        Initialize OS-level adapters for window and audio management.
+        Includes a background warmup of PyAudio to eliminate cold-start latency.
+        """
         self.window_manager = WindowManager(app_state, self.os_adapter)  # type: ignore[arg-type]
         self.audio_manager = AudioManager(
             app_state, self.sound_manager, self.os_adapter
         )
+        
+        threading.Thread(
+            target=self.audio_manager.initialize,
+            daemon=True,
+            name="AudioWarmup"
+        ).start()
 
     def _initialize_transcription_services(self) -> None:
         """
@@ -633,7 +642,7 @@ class OzmozApp:
             log_performance_step("Starting Webview loop (Blocking)")
 
             # This call blocks until all windows are closed
-            webview.start(debug=True)
+            webview.start(debug=False)
 
         except KeyboardInterrupt:
             logging.info("Shutdown requested via keyboard interrupt")

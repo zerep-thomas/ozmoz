@@ -480,7 +480,7 @@ class ConfigManager:
             "audio_model": AppConfig.DEFAULT_AUDIO_MODEL,
             "mute_sound": True,
             "sound_enabled": True,
-            "chart_type": "line",
+            "chart_type": "bar",
             "dashboard_period": STATS_DEFAULT_PERIOD_DAYS,
             "developer_mode": False,
             "stats": {

@@ -186,7 +186,7 @@ class UIState:
     settings_open: bool = False
     settings_html: Optional[str] = None
     index_html: Optional[str] = None
-    chart_type: str = "line"
+    chart_type: str = "bar"
     dashboard_period: int = 7
     show_settings_on_startup: bool = False
 

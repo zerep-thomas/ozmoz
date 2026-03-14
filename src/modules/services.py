@@ -559,88 +559,24 @@ class GenerationController:
 
     def start_recording(self, css_class: str = "ai-recording") -> str:
         """
-        Initiate the audio capture workflow with immediate UI feedback.
-
-        Args:
-            css_class: CSS class for UI state visualization.
-
-        Returns:
-            Path to the audio file that will be recorded.
-
-        Raises:
-            OSError: If audio initialization fails.
+        Initiates the audio capture workflow.
+        Synchronizes UI feedback with actual hardware stream readiness to avoid truncating early speech.
         """
         logger.info(f"Starting recording with UI class: {css_class}")
 
-        def update_ui_in_background() -> None:
-            """Background thread for non-blocking UI updates."""
-            try:
-                if self.app_state.audio.is_recording:
-                    self.transcription_manager.stop_recording_and_transcribe()
-                    time.sleep(UI_UPDATE_SLEEP_SECONDS)
-
-                ai_modes = [
-                    "ai-recording",
-                    "screen-vision-recording",
-                    "web-search-recording",
-                ]
-
-                if self.window:
-                    if css_class in ai_modes:
-                        self._safe_js_call("setAIButtonState", "recording")
-                        # Dispatch custom event for AI mode
-                        self.window.evaluate_js(
-                            "window.dispatchEvent(new CustomEvent('pywebview', "
-                            "{ detail: 'start_asking' }))"
-                        )
-                    else:
-                        self.window.evaluate_js(
-                            "window.dispatchEvent(new CustomEvent('pywebview', "
-                            "{ detail: 'start_recording' }))"
-                        )
-                    self._safe_js_call("startVisualizationOnly")
-
-            except Exception as error:
-                logger.error(f"UI update failed during recording start: {error}")
-
-        threading.Thread(
-            target=update_ui_in_background, daemon=True, name="RecordingUIUpdate"
-        ).start()
-
-        # Play audio feedback if enabled
-        if self.app_state.audio.sound_enabled:
-            try:
-                self.sound_manager.play("beep_on")
-            except Exception as e:
-                logger.warning(f"Failed to play beep sound: {e}")
-
-        # Store mute state for restoration later
-        self.app_state.audio.was_muted_during_recording = (
-            self.app_state.audio.mute_sound
-        )
-
-        if self.app_state.audio.mute_sound:
-            threading.Thread(
-                target=self.audio_manager.mute_system_volume,
-                daemon=True,
-                name="SystemMute",
-            ).start()
-
+        self.app_state.audio.was_muted_during_recording = self.app_state.audio.mute_sound
         self.app_state.ai_recording = True
         self.app_state.audio.recording_start_time = time.time()
 
-        # Initialize audio subsystem
         try:
             self.audio_manager.initialize()
         except Exception as e:
             logger.error(f"Audio manager initialization failed: {e}")
             raise OSError(f"Failed to initialize audio: {e}") from e
 
-        # Setup recording file path
         temp_dir = tempfile.gettempdir()
         audio_file_path = os.path.join(temp_dir, AppConfig.AUDIO_OUTPUT_FILENAME)
 
-        # Validate path for security
         try:
             validate_temp_file_path(audio_file_path, AppConfig.AUDIO_OUTPUT_FILENAME)
         except ValueError as e:
@@ -650,19 +586,54 @@ class GenerationController:
         self.app_state.audio.is_recording = True
 
         def vad_callback() -> None:
-            """Voice Activity Detection callback for silence detection."""
             logger.info("VAD silence detected - triggering stop")
             self.app_state.audio.is_recording = False
 
-        # Start audio recording worker thread
+        self.audio_manager._silence_callback = vad_callback
+
+        stream_ready_event = threading.Event()
+
         threading.Thread(
             target=self.audio_manager._record_audio_worker,
-            args=(audio_file_path,),
+            args=(audio_file_path, stream_ready_event),
             daemon=True,
             name="AudioRecorder",
         ).start()
 
-        self.audio_manager._silence_callback = vad_callback
+        def synchronization_worker() -> None:
+            """Waits for hardware readiness before providing user feedback."""
+            stream_ready_event.wait(timeout=2.0)
+
+            try:
+                if self.window:
+                    ai_modes =["ai-recording", "screen-vision-recording", "web-search-recording"]
+                    if css_class in ai_modes:
+                        self._safe_js_call("setAIButtonState", "recording")
+                        self.window.evaluate_js(
+                            "window.dispatchEvent(new CustomEvent('pywebview', { detail: 'start_asking' }))"
+                        )
+                    else:
+                        self.window.evaluate_js(
+                            "window.dispatchEvent(new CustomEvent('pywebview', { detail: 'start_recording' }))"
+                        )
+                    self._safe_js_call("startVisualizationOnly")
+            except Exception as error:
+                logger.error(f"UI update failed during recording start: {error}")
+
+            if self.app_state.audio.sound_enabled:
+                try:
+                    self.sound_manager.play("beep_on")
+                except Exception as e:
+                    logger.warning(f"Failed to play beep sound: {e}")
+
+            if self.app_state.audio.mute_sound:
+                try:
+                    self.audio_manager.mute_system_volume()
+                except Exception as e:
+                    logger.warning(f"System mute failed: {e}")
+
+        threading.Thread(target=synchronization_worker, daemon=True, name="RecordingUIUpdate").start()
+
         return audio_file_path
 
     def stop_recording(self, css_class: str = "ai-recording") -> Tuple[str, float]:
@@ -2106,8 +2077,14 @@ class AIGenerationManager:
 
     def find_triggered_agent(self, text: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """
-        Scan transcribed text for Agent trigger phrases.
-
+        Scan transcribed text for Agent trigger phrases at the very beginning.
+        
+        Features:
+        - Case-insensitive matching.
+        - Punctuation tolerance (e.g., "Agent, do this" matches "Agent").
+        - Fuzzy matching to tolerate minor STT typos.
+        - Cleans leading punctuation from the resulting instruction.
+        
         Args:
             text: Transcribed user input.
 
@@ -2115,25 +2092,70 @@ class AIGenerationManager:
             Tuple of (agent_config, stripped_instruction_text).
             Returns (None, original_text) if no agent triggered.
         """
-        agents = [
+        import re
+        import difflib
+
+        if not text or not text.strip():
+            return None, text
+
+        agents =[
             a
             for a in self.agent_manager.load_agents()
             if a.get("active") and a.get("trigger")
         ]
 
-        lower_text = text.lower()
+        if not agents:
+            return None, text
+
+        # Tokenize input text preserving delimiters (spaces, punctuation)
+        tokens = re.split(r'(\W+)', text)
+        
+        # Find indices of tokens that are actual words (alphanumeric)
+        word_indices =[i for i, token in enumerate(tokens) if re.match(r'^\w+$', token)]
 
         for agent in agents:
-            trigger_phrase_raw = agent.get("trigger")
+            trigger_phrase_raw = agent.get("trigger", "").strip()
             if not trigger_phrase_raw:
                 continue
 
-            trigger_phrase = trigger_phrase_raw.strip().lower()
-            if trigger_phrase and lower_text.startswith(trigger_phrase):
-                instruction = text[len(trigger_phrase) :].strip()
+            # Tokenize the trigger phrase
+            trigger_words =[w.lower() for w in re.split(r'\W+', trigger_phrase_raw) if w]
+            n_target = len(trigger_words)
+
+            # If the spoken text has fewer words than the trigger, it can't match
+            if not trigger_words or len(word_indices) < n_target:
+                continue
+
+            target_str = " ".join(trigger_words)
+
+            # Extract the first 'n_target' words from the spoken text
+            window_indices = word_indices[:n_target]
+            window_words = [tokens[idx].lower() for idx in window_indices]
+            window_str = " ".join(window_words)
+
+            # Dynamic threshold based on trigger length (stricter for short triggers)
+            min_ratio = 1.0
+            if len(target_str) > 5:
+                min_ratio = 0.80  # Flexible for longer phrases
+            elif len(target_str) > 3:
+                min_ratio = 0.75  # Allows a typo on medium words
+
+            # Calculate mathematical similarity
+            similarity = difflib.SequenceMatcher(None, window_str, target_str).ratio()
+
+            if similarity >= min_ratio:
+                # Match found!
+                end_idx = window_indices[-1]
+                
+                # Reconstruct the instruction from the remaining tokens
+                instruction_raw = "".join(tokens[end_idx + 1:])
+                
+                # Strip leading whitespace and punctuation (e.g., "Agent, do this" -> "do this")
+                instruction = instruction_raw.lstrip(" ,.:;-_\t\n")
+
                 logger.info(
-                    f"Agent triggered: {agent['name']}, "
-                    f"Instruction: {instruction[:50]}..."
+                    f"Agent triggered: {agent['name']} "
+                    f"(Similarity: {similarity:.2f}), Instruction: {instruction[:50]}..."
                 )
                 return agent, instruction
 
