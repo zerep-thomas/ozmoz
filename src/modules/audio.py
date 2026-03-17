@@ -784,65 +784,72 @@ class TranscriptionService:
 
     def _apply_fuzzy_replacement(self, text: str, word1: str, word2: str) -> str:
         """
-        Applies a fuzzy replacement using a sliding window of words to detect
-        minor typographical errors (e.g., 'emial' instead of 'email').
+        Applies a fuzzy replacement using a strict 1-edit maximum rule.
+        Tolerates exactly one insertion, deletion, substitution, or adjacent swap.
         """
-        import difflib
-        
-        # Tokenize target into pure lowercase words
-        target_words =[w.lower() for w in re.split(r'\W+', word1) if w]
+        target_words = [w.lower() for w in re.split(r'\W+', word1) if w]
         if not target_words:
             return text
             
         n_target = len(target_words)
         target_str = " ".join(target_words)
         
-        # Dynamic strictness based on string length to prevent false positives on short words
-        min_ratio = 1.0
-        if len(target_str) > 5:
-            min_ratio = 0.80  # Highly flexible for long phrases
-        elif len(target_str) > 3:
-            min_ratio = 0.75  # Allows a 1-character typo on medium words
-            
-        if min_ratio == 1.0:
-            return text  # Abort fuzzy matching on very short words (<= 3 chars)
-            
-        # Tokenize the input text, keeping punctuation and spaces as explicit, separate tokens
         tokens = re.split(r'(\W+)', text)
-        
-        # Find indices of tokens that are actual words (alphanumeric)
         word_indices =[i for i, token in enumerate(tokens) if re.match(r'^\w+$', token)]
         
         if len(word_indices) < n_target:
             return text
             
+        def is_match(s1: str, s2: str) -> bool:
+            """Strict checker: Max 1 typo allowed. 0 typos for short words."""
+            if s1 == s2:
+                return True
+            if len(s2) <= 3:  # Too short, exact match required
+                return False
+            if abs(len(s1) - len(s2)) > 1:
+                return False
+                
+            # Substitution or Transposition (Swap)
+            if len(s1) == len(s2):
+                diffs =[(i, s1[i], s2[i]) for i in range(len(s1)) if s1[i] != s2[i]]
+                if len(diffs) == 1:
+                    return True  # Exactly 1 substituted letter
+                if len(diffs) == 2:
+                    i1, c1_1, c2_1 = diffs[0]
+                    i2, c1_2, c2_2 = diffs[1]
+                    # Check if it's an adjacent swap (e.g. 'emial' instead of 'email')
+                    if i2 == i1 + 1 and c1_1 == c2_2 and c1_2 == c2_1:
+                        return True
+                return False
+                
+            # Insertion or Deletion
+            shorter, longer = (s1, s2) if len(s1) < len(s2) else (s2, s1)
+            for i in range(len(shorter)):
+                if shorter[i] != longer[i]:
+                    return shorter[i:] == longer[i+1:]
+            return True
+
         i = 0
         while i <= len(word_indices) - n_target:
-            # Extract the current sequence of words matching the target length
             window_indices = word_indices[i:i + n_target]
             window_words = [tokens[idx].lower() for idx in window_indices]
             window_str = " ".join(window_words)
             
-            # Calculate mathematical similarity (0.0 to 1.0)
-            similarity = difflib.SequenceMatcher(None, window_str, target_str).ratio()
-            
-            if similarity >= min_ratio:
+            if is_match(window_str, target_str):
                 start_idx = window_indices[0]
                 end_idx = window_indices[-1]
                 
-                # Replace the first word token with the target replacement
+                # Replace the sequence
                 tokens[start_idx] = word2
                 
-                # Clear the subsequent tokens (including internal delimiters) covered by the match
-                # This perfectly preserves the adjacent trailing/leading punctuation
+                # Clear intermediate tokens (preserves external punctuation)
                 for j in range(start_idx + 1, end_idx + 1):
                     tokens[j] = ""
                 
-                i += n_target  # Skip the replaced sequence
+                i += n_target
             else:
                 i += 1
                 
-        # Reconstruct the string
         return "".join(tokens)
 
     def convert_numbers(self, transcript: str, language: str) -> str:

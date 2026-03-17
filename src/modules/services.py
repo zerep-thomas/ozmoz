@@ -967,23 +967,32 @@ class GenerationController:
 
         client = self.app_state.groq_client
 
-        # Base parameters
         params: Dict[str, Any] = {
             "model": model,
             "messages": messages,
             "stream": True,
+            "temperature": 1,
+            "top_p": 1,
+            "stop": None
         }
 
-        # Advanced model configuration
         if model in self.app_state.models.advanced_model_list:
             params["extra_headers"] = {"Groq-Model-Version": "latest"}
             params["model"] = "groq/compound"
-            params["max_completion_tokens"] = MAX_AGENT_COMPLETION_TOKENS
-            logger.debug(f"Using advanced model config for {model}")
+            params["max_completion_tokens"] = 1024
+            
+            params["extra_body"] = {
+                "compound_custom": {
+                    "tools": {
+                        "enabled_tools": ["web_search", "code_interpreter", "visit_website"]
+                    }
+                }
+            }
+            logger.debug(f"Using advanced model config for {model} with compound_custom in extra_body")
 
         # Tool-enabled models
         elif model in self.app_state.models.tool_model_list:
-            params["tools"] = [{"type": "browser_search"}]
+            params["tools"] =[{"type": "browser_search"}]
             logger.debug(f"Enabled browser search tool for {model}")
 
         return client.chat.completions.create(**params)
@@ -1670,7 +1679,14 @@ class WebSearchManager:
 
     def build_web_search_system_prompt(self, selected_text: str) -> str:
         date_str = datetime.now().strftime("%A, %B %d, %Y")
-        prompt = f"You are a helpful research assistant with access to web search. Today is {date_str}. Respond in the same language as the user's message. Cite your sources."
+        prompt = (
+            f"You are a helpful research assistant with access to web search. "
+            f"Today is {date_str}. Respond in the same language as the user's message. "
+            f"\n\nCRITICAL INSTRUCTION FOR CITATIONS:\n"
+            f"When citing web sources, NEVER use the 【1†...】 format. "
+            f"Instead, use standard markdown links with the actual URL like this:[Source Name](URL). "
+            f"Always include a 'Sources' list with the full URLs at the end of your response."
+        )
 
         if selected_text:
             prompt += f"\n\nContext provided by the user:\n{selected_text}"

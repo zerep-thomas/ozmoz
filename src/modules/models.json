@@ -11,17 +11,6 @@
     "tokens_per_minute": 7000
   },
   {
-    "name": "gpt-oss-120b",
-    "family": "gpt-oss-120b",
-    "provider": "cerebras",
-    "advantage": {
-      "en": "Web & Thinking",
-      "fr": "Web & Réflexion",
-      "es": "Web y Reflexión"
-    },
-    "tokens_per_minute": 50000
-  },
-  {
     "name": "groq/compound",
     "provider": "groq",
     "advantage": {
@@ -74,16 +63,6 @@
     "tokens_per_minute": 6000
   },
   {
-    "name": "zai-glm-4.7",
-    "provider": "cerebras",
-    "advantage": {
-      "en": "Code",
-      "fr": "Code",
-      "es": "Código"
-    },
-    "tokens_per_minute": 50000
-  },
-  {
     "name": "meta-llama/llama-4-scout-17b-16e-instruct",
     "provider": "groq",
     "advantage": {
@@ -107,11 +86,7 @@
     "advanced_models": ["groq/compound", "groq/compound-mini"]
   },
   {
-    "web_search_models": [
-      "groq/compound",
-      "gpt-oss-120b",
-      "openai/gpt-oss-120b"
-    ]
+    "web_search_models": ["groq/compound"]
   },
   {
     "name": "groq/compound",
@@ -125,16 +100,6 @@
   },
   {
     "name": "gpt-oss-120b",
-    "provider": "groq",
-    "family": "Web Search",
-    "description": "Modèle expérimental avec accès à Internet",
-    "advantage": {
-      "en": "Web Search",
-      "fr": "Recherche Web"
-    }
-  },
-  {
-    "name": "openai/gpt-oss-120b",
     "provider": "groq",
     "family": "Web Search",
     "description": "Modèle expérimental avec accès à Internet",
