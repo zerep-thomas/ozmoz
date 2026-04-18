@@ -178,21 +178,23 @@ function renderActivityChart(
   let values;
 
   if (isLine) {
-    const logValues = originalValues.map((v) => (v > 0 ? Math.log1p(v) : null));
+    const powerValues = originalValues.map((v) =>
+      v > 0 ? Math.pow(v, 0.65) : null,
+    );
 
-    values = logValues.map((v, i) => {
+    values = powerValues.map((v, i) => {
       if (v !== null) return v;
 
       let left = null,
         leftIdx = i - 1;
-      while (leftIdx >= 0 && logValues[leftIdx] === null) leftIdx--;
-      if (leftIdx >= 0) left = logValues[leftIdx];
+      while (leftIdx >= 0 && powerValues[leftIdx] === null) leftIdx--;
+      if (leftIdx >= 0) left = powerValues[leftIdx];
 
       let right = null,
         rightIdx = i + 1;
-      while (rightIdx < logValues.length && logValues[rightIdx] === null)
+      while (rightIdx < powerValues.length && powerValues[rightIdx] === null)
         rightIdx++;
-      if (rightIdx < logValues.length) right = logValues[rightIdx];
+      if (rightIdx < powerValues.length) right = powerValues[rightIdx];
 
       if (left !== null && right !== null) return (left + right) / 2;
       if (left !== null) return left;
@@ -203,14 +205,16 @@ function renderActivityChart(
     values = originalValues;
   }
 
-  const gradient = ctx.createLinearGradient(
-    0,
-    0,
-    0,
-    chartContainer.offsetHeight,
-  );
-  gradient.addColorStop(0, "rgba(156, 87, 247, 0.5)");
-  gradient.addColorStop(1, "rgba(156, 87, 247, 0)");
+  const chartHeight = chartContainer.offsetHeight;
+  const gradient = ctx.createLinearGradient(0, chartHeight, 0, 0);
+
+  if (isLine) {
+    gradient.addColorStop(0, "rgba(156, 87, 247, 0)");
+    gradient.addColorStop(1, "rgba(156, 87, 247, 0.12)");
+  } else {
+    gradient.addColorStop(0, "#9c57f7");
+    gradient.addColorStop(1, "#b67cf7");
+  }
 
   if (window.myActivityChart) {
     window.myActivityChart.destroy();
@@ -218,8 +222,10 @@ function renderActivityChart(
 
   const initialData = values.map(() => 0);
 
-  const backgroundColor = isLine ? gradient : "rgba(156, 87, 247, 0.65)";
-  const borderRadius = isLine ? 0 : 4;
+  const backgroundColor = gradient;
+  const borderRadius = isLine ? 0 : 6;
+  const borderColor = isLine ? "#9c57f7" : "rgba(255, 255, 255, 0.4)";
+  const borderWidth = isLine ? 2 : 1.5;
   const hoverRadius = isLine ? 6 : 0;
 
   window.myActivityChart = new Chart(ctx, {
@@ -231,35 +237,47 @@ function renderActivityChart(
           label: window.t("chart_label_words"),
           data: initialData,
           fill: isLine,
-          borderColor: "#9c57f7",
-          borderWidth: 2,
+          borderColor: borderColor,
+          borderWidth: borderWidth,
           backgroundColor: backgroundColor,
           pointBackgroundColor: "#ffffff",
           pointBorderColor: "#9c57f7",
           pointBorderWidth: 2,
           pointRadius: 0,
-          pointHoverRadius: hoverRadius,
+          pointHitRadius: 15,
+          pointHoverRadius: 6,
           pointHoverBackgroundColor: "#ffffff",
           pointHoverBorderColor: "#9c57f7",
-          pointHoverBorderWidth: 2,
+          pointHoverBorderWidth: 3,
           tension: 0,
-          cubicInterpolationMode: "monotone",
           borderCapStyle: "round",
           borderJoinStyle: "round",
           borderRadius: borderRadius,
           borderSkipped: false,
           spanGaps: true,
+          barPercentage: 0.6,
+          categoryPercentage: 0.7,
+          clip: false,
+          pointRadius: 0,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: {
+        padding: {
+          left: isLine ? 0 : 20,
+          right: isLine ? 0 : 20,
+          top: 10,
+        },
+      },
       animation: { duration: 1200, easing: "easeOutQuart" },
       interaction: { mode: "index", intersect: false },
       scales: {
         x: {
           display: true,
+          offset: !isLine,
           grid: {
             display: true,
             color: "rgba(0, 0, 0, 0.04)",
@@ -276,7 +294,19 @@ function renderActivityChart(
           },
           border: { display: false },
         },
-        y: { display: false, beginAtZero: true },
+        y: {
+          display: true,
+          beginAtZero: true,
+          suggestedMax: 10,
+          grace: "20%",
+          border: { display: false },
+          grid: {
+            display: false,
+          },
+          ticks: {
+            display: false,
+          },
+        },
       },
       plugins: {
         legend: { display: false },

@@ -118,50 +118,56 @@ body {
 .sidebar-item {
   display: flex;
   align-items: center;
-  padding: 8px var(--spacing-md);
+  padding: 10px var(--spacing-md) 10px 27px;
   font-size: 13px;
-  border-radius: 8px;
-  margin: 2px var(--spacing-sm);
+  border-radius: 0 12px 12px 0;
+  margin: 4px var(--spacing-sm) 4px -3px;
   cursor: pointer;
-  transition: var(--transition-default);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--color-text-secondary);
   position: relative;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    text-shadow 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .sidebar-item:hover {
-  background-color: var(--color-hover);
+  background-color: rgba(255, 255, 255, 0.5);
   color: var(--color-text);
 }
 
 .sidebar-item.active {
-  background-color: var(--color-accent-light);
-  font-weight: 500;
+  background-color: transparent;
   color: var(--color-text);
+  box-shadow: none;
+  border-color: transparent;
+  font-weight: normal;
+  text-shadow:
+    0.2px 0 0 var(--color-text),
+    -0.2px 0 0 var(--color-text);
 }
 
 .sidebar-item.active::before {
   content: "";
   position: absolute;
-  left: 0;
+  left: -1px;
   top: 50%;
   transform: translateY(-50%);
-  width: 3px;
-  height: 18px;
-  background-color: var(--color-accent);
-  border-radius: 0 2px 2px 0;
+  width: 4px;
+  height: 22px;
+  background: linear-gradient(180deg, #b67cf7 0%, var(--color-accent) 100%);
+  border-radius: 0 4px 4px 0;
 }
 
 .sidebar-icon {
   width: 20px;
   height: 20px;
-  margin-right: 5px;
+  margin-right: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.sidebar-item.active .sidebar-icon img {
+  filter: none;
 }
 
 .sidebar-icon img {
@@ -1606,7 +1612,7 @@ body:has(.modal-backdrop.visible) .container {
 
 .dashboard-stat-card {
   background-color: var(--dark-bg-secondary);
-  border-radius: 8px;
+  border-radius: 18px;
   padding: 15px;
   border: 1px solid var(--dark-border-color);
   display: flex;
@@ -1659,7 +1665,7 @@ body:has(.modal-backdrop.visible) .container {
 
 .dashboard-chart-container {
   background-color: var(--dark-bg-secondary);
-  border-radius: 8px;
+  border-radius: 22px;
   padding: 20px;
   border: 1px solid var(--dark-border-color);
 }
@@ -1709,6 +1715,7 @@ body:has(.modal-backdrop.visible) .container {
 }
 
 .chart-body {
+  position: relative;
   height: calc(40vh + 150px);
   min-height: 180px;
   max-height: 500px;
@@ -1730,7 +1737,7 @@ body:has(.modal-backdrop.visible) .container {
 
 .dashboard-widget {
   background-color: var(--dark-bg-secondary);
-  border-radius: 8px;
+  border-radius: 18px;
   padding: 20px;
   border: 1px solid var(--dark-border-color);
   display: flex;
@@ -2108,7 +2115,7 @@ body:has(.modal-backdrop.visible) .container {
   width: 140px;
   height: 30px;
   background: var(--color-input-bg);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
   position: relative;
   transition: var(--transition-default);
@@ -2150,7 +2157,7 @@ body:has(.modal-backdrop.visible) .container {
   height: calc(100% - 4px);
   background: var(--color-card-bg);
   color: var(--color-text);
-  border-radius: 6px;
+  border-radius: 10px;
   position: absolute;
   left: 2px;
   top: 2px;
@@ -2606,7 +2613,9 @@ input[type="password"]::-ms-clear {
   opacity: 0;
   transform: translateY(10px);
   pointer-events: none;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .api-actions.visible {
