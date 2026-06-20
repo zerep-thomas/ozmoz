@@ -1,0 +1,10 @@
+PySide6
+numpy
+sounddevice
+pyaudio
+keyboard
+faster-whisper
+requests
+groq
+pywin32
+pynput

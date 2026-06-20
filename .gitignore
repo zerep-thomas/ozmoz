@@ -1,0 +1,20 @@
+# User data — never commit
+data/credentials.json
+data/history.json
+data/modes.json
+data/vocabulary.json
+data/models/
+
+ffmpeg.exe
+ffprobe.exe
+
+# Build artifacts
+psd-data/
+dist/
+build/
+*.spec.bak
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/

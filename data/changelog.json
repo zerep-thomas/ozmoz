@@ -1,0 +1,12 @@
+[
+    {
+        "date": "Today",
+        "title": "Welcome",
+        "description": "Thank you for downloading Ozmoz, I hope you enjoy it!"
+    },
+    {
+        "date": "June 1",
+        "title": "Ozmoz Beta",
+        "description": "A portable beta version of Ozmoz including near-instant audio transcription features, vocabulary addition, and configuration modes."
+    }
+]
