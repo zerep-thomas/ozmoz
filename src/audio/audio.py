@@ -188,6 +188,7 @@ class TranscriptionService:
 
             logger.info("Transcription starting | Preset: %s | Model: %s | Lang: %s", ui_preset, ui_model, lang_iso)
 
+            # --- GESTION DES PROMPTS ---
             if ui_preset == "Email Draft":
                 prompt = (
                     "Transcribe this audio as a professional email. "
@@ -196,12 +197,16 @@ class TranscriptionService:
                     "Format with a greeting, body paragraphs, and a sign-off."
                 )
             else:
-                prompt = "Transcribe the audio accurately. Ignore silences, microphone noises and do not generate text like 'Subtitles by' or 'Thank you'."
+                # Mode classique : aucun prompt d'instruction pour éviter les hallucinations et traductions
+                prompt = ""
                 
             if self.vocabulary_manager:
                 words = self.vocabulary_manager.get_words()
                 if words:
-                    prompt += " Vocabulary: " + ", ".join(words) + "."
+                    if prompt:
+                        prompt += " Vocabulary: " + ", ".join(words) + "."
+                    else:
+                        prompt = ", ".join(words)
                     
             if len(prompt) > 500: prompt = prompt[:500]
 
@@ -221,14 +226,18 @@ class TranscriptionService:
                 with open(filename, "rb") as file_obj:
                     audio_content = file_obj.read()
 
-                transcription = client.audio.transcriptions.create(
-                    model=api_model,
-                    file=(Path(filename).name, audio_content),
-                    language=lang_iso if lang_iso else None,
-                    response_format="verbose_json",
-                    prompt=prompt,
-                    temperature=0.0
-                )
+                kwargs = {
+                    "model": api_model,
+                    "file": (Path(filename).name, audio_content),
+                    "response_format": "verbose_json",
+                    "temperature": 0.0
+                }
+                if lang_iso:
+                    kwargs["language"] = lang_iso
+                if prompt:
+                    kwargs["prompt"] = prompt
+
+                transcription = client.audio.transcriptions.create(**kwargs)
                 
                 valid_text = []
                 segments = None
@@ -393,7 +402,7 @@ class TranscriptionService:
             "ar": "مع التحية،",
             "hi": "धन्यवाद,",
             "tr": "Saygılarımla,",
-            "sv": "Med vänliga hälsningar,",
+            "sv": "Med vänliga hsningar,",
             "da": "Med venlig hilsen,",
             "no": "Med vennlig hilsen,",
             "fi": "Ystävällisin terveisin,",
@@ -424,9 +433,9 @@ class TranscriptionService:
         transition_patterns = [
             r'^(however|nevertheless|furthermore|moreover|additionally|consequently|therefore|meanwhile|alternatively|specifically|finally|in\s+conclusion|to\s+conclude|on\s+the\s+other\s+hand|firstly|secondly|thirdly)',
             r'^(cependant|néanmoins|par\s+ailleurs|de\s+plus|ensuite|enfin|en\s+conclusion|d\'autre\s+part|toutefois|premièrement|deuxièmement)',
-            r'^(sin\s+embargo|además|por\s+lo\s+tanto|en\s+conclusión|por\s+otro\s+lado|finalmente)',
+            r'^(sin\s+embargo|además|por\s+lo\s+tanto|en\s+conclusión|por\s+outro\s+lado|finalmente)',
             r'^(jedoch|außerdem|darüber\s+hinaus|zusammenfassend|schließlich|andererseits)',
-            r'^(tuttavia|inoltre|pertanto|in\s+conclusione|d\'altra\s+parte|infine)',
+            r'^(tuttavia|inoltre|pertanto|in\s+conclusione|d\'alta\s+parte|infine)',
             r'^(no\s+entanto|além\s+disso|portanto|em\s+conclusão|por\s+outro\s+lado|finalmente)',
         ]
         
@@ -517,7 +526,6 @@ class TranscriptionManager:
                     audio_file_to_send, converted = self._convert_wav_to_mp3(wav_file)
                     
                     start_process_time = time.time()
-                    # C'est ici que Groq peut planter si stdout est fermé
                     text = self.transcription_service.transcribe(audio_file_to_send, duration=audio_duration)
                     processing_time = time.time() - start_process_time
 
@@ -528,7 +536,6 @@ class TranscriptionManager:
                         sys_cfg = self.transcription_service.mode_manager.get_mode("system")
                         ui_model = sys_cfg.get("active_model", "Whisper V3 Turbo")
                         
-                        # Déterminer la méthode pour l'historique
                         if "Local" in ui_model:
                             used_method = f"local-{ui_model.replace(' ', '-').lower()}"
                         else:
@@ -553,7 +560,6 @@ class TranscriptionManager:
             except Exception as e:
                 logger.error(f"FATAL THREAD ERROR: {e}")
             finally:
-                # GARANTIT que l'app se débloque
                 self.app_state.is_busy = False
                 self._is_stopping = False
                 tracker.step("Process finished (cleaned up)")
