@@ -29,13 +29,29 @@ class DualModeHotKey:
         on_activate: SimpleCallback | None = None,
         on_deactivate: SimpleCallback | None = None,
     ) -> None:
-        self._trigger_keys = trigger_keys
+        self._trigger_keys = {self._normalize_key(k) for k in trigger_keys}
         self._currently_pressed_keys: set[PynputKey] = set()
         self._on_activate = on_activate
         self._on_deactivate = on_deactivate
         self._is_active = False
 
+    def _normalize_key(self, key: PynputKey) -> PynputKey:
+        """
+        Normalise les touches pour éviter les conflits entre les touches
+        gauche/droite (ex: ctrl_l -> ctrl) et unifie l'espace.
+        """
+        if hasattr(key, 'name') and key.name:
+            base_name = key.name.split('_')[0]
+            if hasattr(Key, base_name):
+                return getattr(Key, base_name)
+        
+        if hasattr(key, 'char') and key.char == ' ':
+            return Key.space
+            
+        return key
+
     def press(self, key: PynputKey) -> None:
+        key = self._normalize_key(key)
         if key in self._trigger_keys:
             self._currently_pressed_keys.add(key)
             if self._currently_pressed_keys == self._trigger_keys:
@@ -45,6 +61,7 @@ class DualModeHotKey:
                         self._on_activate()
 
     def release(self, key: PynputKey) -> None:
+        key = self._normalize_key(key)
         if key in self._trigger_keys:
             self._currently_pressed_keys.discard(key)
             if self._is_active:

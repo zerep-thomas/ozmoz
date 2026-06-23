@@ -4,6 +4,7 @@ data/history.json
 data/modes.json
 data/vocabulary.json
 data/models/
+data/settings.json
 
 ffmpeg.exe
 ffprobe.exe
@@ -18,3 +19,6 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+
+# Logs
+debug.log
