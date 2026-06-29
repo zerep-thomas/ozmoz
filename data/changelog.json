@@ -5,6 +5,11 @@
         "description": "Thank you for downloading Ozmoz, I hope you enjoy it!"
     },
     {
+        "date": "June 29",
+        "title": "New mode for v1.0.1 !",
+        "description": "Now you can turn your voice into LaTeX equations with the new Equation mode. This mode is only available when using a Groq API key because it requires cloud-based LLMs. By default, it uses the cheapest and fastest model currently available on the Groq Cloud."
+    },
+    {
         "date": "June 1",
         "title": "Ozmoz Beta",
         "description": "A portable beta version of Ozmoz including near-instant audio transcription features, vocabulary addition, and configuration modes."

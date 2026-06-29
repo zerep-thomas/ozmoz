@@ -1,8 +1,10 @@
+import io
 import logging
 import os
 import sys
 import time
 import threading
+import tempfile
 import win32clipboard
 import win32con
 import keyboard
@@ -10,6 +12,7 @@ import winsound
 import pywintypes
 from pathlib import Path
 from typing import IO, Optional
+from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,9 @@ class SoundManager:
                     cls._instance = super().__new__(cls)
                     if settings_manager:
                         cls.settings_manager = settings_manager
+                    
+                    # Pre-load and process sounds in background during startup
+                    threading.Thread(target=cls._instance._initialize, daemon=True, name="SoundPreloader").start()
         return cls._instance
 
     def _initialize(self):
@@ -82,8 +88,33 @@ class SoundManager:
             try:
                 on_path = PathManager.get_resource_path(BEEP_ON_FILENAME)
                 off_path = PathManager.get_resource_path(BEEP_OFF_FILENAME)
-                if os.path.exists(on_path): SoundManager.beep_on_path = on_path
-                if os.path.exists(off_path): SoundManager.beep_off_path = off_path
+                
+                temp_dir = tempfile.gettempdir()
+                out_on_path = os.path.join(temp_dir, "ozmoz_beep_on.wav")
+                out_off_path = os.path.join(temp_dir, "ozmoz_beep_off.wav")
+                
+                # Set default fallbacks to the original sound files
+                SoundManager.beep_on_path = on_path
+                SoundManager.beep_off_path = off_path
+
+                if os.path.exists(on_path):
+                    try:
+                        audio_on = AudioSegment.from_wav(on_path) - 10.0
+                        audio_on.export(out_on_path, format="wav")
+                        if os.path.exists(out_on_path):
+                            SoundManager.beep_on_path = out_on_path
+                    except Exception as e:
+                        logger.error(f"Failed to lower volume for beep_on: {e}")
+                
+                if os.path.exists(off_path):
+                    try:
+                        audio_off = AudioSegment.from_wav(off_path) - 10.0
+                        audio_off.export(out_off_path, format="wav")
+                        if os.path.exists(out_off_path):
+                            SoundManager.beep_off_path = out_off_path
+                    except Exception as e:
+                        logger.error(f"Failed to lower volume for beep_off: {e}")
+                    
                 SoundManager._initialized = True
             except Exception:
                 logger.exception("Failed to initialize sound manager")
@@ -94,9 +125,10 @@ class SoundManager:
         if not SoundManager._initialized: self._initialize()
         
         sound_path = SoundManager.beep_on_path if sound_name == "beep_on" else SoundManager.beep_off_path
-        if not sound_path: return
+        if not sound_path or not os.path.exists(sound_path): return
         
         try:
+            # Play standard WAV file asynchronously using SND_FILENAME safely
             winsound.PlaySound(sound_path, winsound.SND_FILENAME | winsound.SND_NODEFAULT | winsound.SND_ASYNC)
         except Exception:
             logger.exception("Failed to play sound")
@@ -121,7 +153,7 @@ class ClipboardManager:
                 logger.error("Paste failed: Could not access Windows clipboard.")
                 return
 
-            time.sleep(0.02)
+            time.sleep(0.1)
             try:
                 keyboard.send("ctrl+v")
             except Exception:

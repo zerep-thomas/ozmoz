@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import ctypes
+import threading
 
 if sys.platform == 'win32' and getattr(sys, 'frozen', False):
     f = open(os.devnull, 'w')
@@ -10,13 +11,19 @@ if sys.platform == 'win32' and getattr(sys, 'frozen', False):
     sys.stderr = f
 
 log_file = os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__), "debug.log")
+
+# Configure FileHandler to capture only ERROR and CRITICAL levels
+file_handler = logging.FileHandler(log_file, encoding='utf-8')
+file_handler.setLevel(logging.ERROR)
+
+# Configure StreamHandler to capture INFO and above for console output
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setLevel(logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO, # Root level set to INFO to allow stdout to catch info logs
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(log_file, encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[file_handler, stream_handler]
 )
 logger = logging.getLogger(__name__)
 
@@ -37,9 +44,6 @@ from src.core.utils import ClipboardManager, PathManager, SoundManager
 from src.core.vocabulary import VocabularyManager
 from src.core.warmup import run_ffmpeg_warmup_in_background
 from src.ui.bridge import UIBridge
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
 
 if sys.platform == 'win32':
 
@@ -95,6 +99,9 @@ def main() -> None:
     
     audio_manager = AudioManager(app_state, sound_manager, event_bus, mode_manager, cred_manager)
     
+    # Pre-initialize audio drivers in a background thread to prevent delay on first record keypress
+    threading.Thread(target=audio_manager.initialize, daemon=True, name="AudioDriverWarmup").start()
+
     transcription_service = TranscriptionService(
         app_state, cred_manager, vocab_manager, mode_manager
     )
@@ -185,9 +192,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-    

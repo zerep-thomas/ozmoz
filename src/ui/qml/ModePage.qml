@@ -42,6 +42,8 @@ Item {
     property real downloadProgress: 0.0
     
     property bool showApiKeyModal: false
+    
+    property bool showEquationKeyModal: false
 
     Connections {
         target: uiBridge
@@ -143,8 +145,9 @@ Item {
 
 
     readonly property var presets: [
-        { name: "Voice to text", icon: "icons/voice2text.svg", tag: "", tip: "Simply to transcribe what you say into text" },
-        { name: "Email Draft", icon: "icons/email.svg", tip: "Automatically format your speech into a ready-to-send email" }
+        { name: "Voice to text", icon: "icons/voice2text.svg", tag: "", tip: "Simply to transcribe what you say into text", requireKey: false },
+        { name: "Email Draft", icon: "icons/email.svg", tag: "", tip: "Automatically format your speech into a ready-to-send email", requireKey: false },
+        { name: "Equation", icon: "icons/equation.svg", tag: "LaTeX", tip: "Convert your voice into LaTeX equations. Requires Groq API Key.", requireKey: true }
     ]
 
     readonly property var languages: [
@@ -222,6 +225,13 @@ Item {
             if (voiceModels[i].name === mName) return voiceModels[i].icon;
         }
         return voiceModels[0].icon;
+    }
+
+    function getPresetIcon(pName) {
+        for (var i = 0; i < presets.length; i++) {
+            if (presets[i].name === pName) return presets[i].icon;
+        }
+        return presets[0].icon;
     }
 
     function getHeaderTitle() {
@@ -586,16 +596,31 @@ Item {
                                     Text { text: "Preset"; color: "white"; font.pixelSize: 14; font.bold: true }
                                     InfoIcon { tip: "Select the type of task for which you want to use this mode" }
                                     Item { Layout.fillWidth: true }
+                                    
                                     Rectangle {
                                         id: presetBtn
                                         height: 34; implicitWidth: 190; radius: 8
                                         color: presetHover.containsMouse || openDropdown === "preset" ? "#6a6e70" : "#64686a"
                                         border.color: openDropdown === "preset" ? "#5a9ef8" : "#7e8385"; border.width: 1
+                                        
                                         RowLayout {
-                                            anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
-                                            Text { text: getActive("preset"); color: "white"; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true }
+                                            anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 8
+                                            
+                                            Item { 
+                                                width: 18; height: 18; Layout.alignment: Qt.AlignVCenter
+                                                Image { 
+                                                    id: currentPresetIcon
+                                                    width: 18; height: 18; anchors.centerIn: parent
+                                                    source: getPresetIcon(getActive("preset"))
+                                                    fillMode: Image.PreserveAspectFit; smooth: true; mipmap: true; layer.enabled: true 
+                                                }
+                                                ColorOverlay { anchors.fill: currentPresetIcon; source: currentPresetIcon; color: "white" } 
+                                            }
+                                            
+                                            Text { text: getActive("preset"); color: "white"; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                                             Text { text: "\u25BE"; color: "#ccc"; font.pixelSize: 14; font.bold: true }
                                         }
+                                        
                                         MouseArea {
                                             id: presetHover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                             onClicked: openDropdown === "preset" ? openDropdown = "" : openDrop("preset", presetBtn, presets.length * 30 + 12) 
@@ -953,13 +978,15 @@ Item {
                         delegate: Item {
                             id: presetItem
                             width: dropPanel.width; height: 30 
+                            property bool isAvailable: !modelData.requireKey || uiBridge.hasGroqKeyProp
+
                             Rectangle {
                                 anchors.fill: parent
                                 anchors.leftMargin: 8; anchors.rightMargin: 8; anchors.topMargin: 2; anchors.bottomMargin: 2
                                 radius: 6 
                                 color: {
                                     var activeVal = openDropdown === "modal_preset" ? newModePreset : getActive("preset");
-                                    return activeVal === modelData.name ? "#2c5fc4" : pHover.containsMouse ? "#20ffffff" : "transparent";
+                                    return activeVal === modelData.name ? "#2c5fc4" : (pHover.containsMouse ? (isAvailable ? "#20ffffff" : "#10ffffff") : "transparent");
                                 }
                             }
                             RowLayout {
@@ -971,9 +998,13 @@ Item {
                                         width: 18; height: 18; anchors.centerIn: parent
                                         source: modelData.icon; fillMode: Image.PreserveAspectFit; smooth: true; mipmap: true; layer.enabled: true 
                                     }
-                                    ColorOverlay { anchors.fill: presetIcon; source: presetIcon; color: "white" } 
+                                    ColorOverlay { anchors.fill: presetIcon; source: presetIcon; color: "white"; opacity: isAvailable ? 1.0 : 0.5 } 
                                 }
-                                Text { text: modelData.name; color: "white"; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
+                                Text { 
+                                    text: modelData.name; 
+                                    color: isAvailable ? "white" : "#909090"; 
+                                    font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter 
+                                }
                             }
                             MouseArea { 
                                 id: pHover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -986,6 +1017,11 @@ Item {
                                 }
                                 onExited: { if (presetTip === modelData.tip) presetTip = "" }
                                 onClicked: { 
+                                    if (!isAvailable) {
+                                        modePageRoot.showEquationKeyModal = true
+                                        openDropdown = ""
+                                        return
+                                    }
                                     if (openDropdown === "modal_preset") {
                                         newModePreset = modelData.name
                                     } else {
@@ -1373,6 +1409,71 @@ Item {
                         MouseArea { 
                             id: dlConfirmHover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             onClicked: uiBridge.downloadLocalModel(modelToDownload)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // ── EQUATION API KEY REQUIRED MODAL ──
+    Item {
+        id: equationKeyModalOverlay
+        anchors.fill: parent; z: 300
+        visible: opacity > 0; opacity: modePageRoot.showEquationKeyModal ? 1.0 : 0.0
+        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+
+        ShaderEffectSource { id: eqKeyBlurSrc; anchors.fill: parent; sourceItem: backgroundCapture; visible: false }
+        FastBlur { id: eqKeyFirstBlur; anchors.fill: parent; source: eqKeyBlurSrc; radius: 32 }
+        ShaderEffectSource { id: eqKeyMidCap; sourceItem: eqKeyFirstBlur; hideSource: true; visible: false }
+        FastBlur { anchors.fill: parent; source: eqKeyMidCap; radius: 32; transparentBorder: false }
+        Rectangle { anchors.fill: parent; color: Qt.rgba(0.12, 0.13, 0.14, 0.65) }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 380
+            height: 180
+            radius: 12; color: "#494c4d"; border.color: "#66696a"; border.width: 1
+            scale: modePageRoot.showEquationKeyModal ? 1.0 : 0.8
+            Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+            MouseArea { anchors.fill: parent } 
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+                Text { text: "API Key Required"; color: "white"; font.pixelSize: 16; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                
+                Text {
+                    text: "To use the Equation mode (LaTeX generation), you need to provide a Groq API key in the settings."
+                    color: "#b0b0b0"; font.pixelSize: 13; wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true; Layout.topMargin: 10
+                }
+
+                Item { Layout.fillHeight: true }
+                
+                RowLayout {
+                    Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter; spacing: 12
+                    
+                    Rectangle {
+                        implicitWidth: 100; height: 32; radius: 8
+                        color: eqKeyCancelHover.containsMouse ? "#6a6e70" : "#55585a"; border.color: "#7e8385"; border.width: 1
+                        Text { anchors.centerIn: parent; text: "Cancel"; color: "white"; font.pixelSize: 13; font.bold: true }
+                        MouseArea { 
+                            id: eqKeyCancelHover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                modePageRoot.showEquationKeyModal = false
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        implicitWidth: 120; height: 32; radius: 8
+                        color: eqKeyConfirmHover.containsMouse ? "#2c5fc4" : "#2452a3"; border.color: "#3a73e6"; border.width: 1
+                        Text { anchors.centerIn: parent; text: "Go to Settings"; color: "white"; font.pixelSize: 13; font.bold: true }
+                        MouseArea { 
+                            id: eqKeyConfirmHover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                modePageRoot.showEquationKeyModal = false
+                                uiBridge.requestNavigateToConfig() 
+                            }
                         }
                     }
                 }

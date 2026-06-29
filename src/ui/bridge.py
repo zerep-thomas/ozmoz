@@ -32,6 +32,8 @@ class UIBridge(QObject):
 
     showDownloadModalRequested = Signal(str)
     showUpdateModalRequested = Signal(str, str)
+    
+    processingChanged = Signal(bool)
 
     def __init__(self, app_state, event_bus, cred_manager,
                  stats_manager=None, changelog_manager=None, hist_manager=None,
@@ -49,6 +51,7 @@ class UIBridge(QObject):
         self.mode_manager = mode_manager
         
         self._active = False
+        self._processing = False
         self.NUM_BARS = 9
         self._levels = [2.0] * self.NUM_BARS
         self._smooth = [0.0] * self.NUM_BARS
@@ -71,10 +74,25 @@ class UIBridge(QObject):
         event_bus.subscribe("settings_updated", lambda d: self.settingsChanged.emit())
         event_bus.subscribe("mode_updated", lambda d: self.modeChanged.emit())
         
+        event_bus.subscribe("processing_started", self.on_processing_started)
+        event_bus.subscribe("processing_finished", self.on_processing_finished)
+        
         event_bus.subscribe("update_check_started", lambda d: self.updateStatusChanged.emit("checking", "Checking..."))
         event_bus.subscribe("update_available", self.on_update_available)
         event_bus.subscribe("update_not_available", lambda d: self.updateStatusChanged.emit("up_to_date", "You are up to date"))
         event_bus.subscribe("update_check_failed", lambda d: self.updateStatusChanged.emit("error", "Check failed"))
+
+    def on_processing_started(self, data):
+        self._processing = True
+        self.processingChanged.emit(self._processing)
+
+    def on_processing_finished(self, data):
+        self._processing = False
+        self.processingChanged.emit(self._processing)
+
+    @Property(bool, notify=processingChanged)
+    def processing(self): 
+        return self._processing
 
     @Slot(str)
     def requestShowDownloadModal(self, modelName):

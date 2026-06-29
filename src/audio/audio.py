@@ -83,7 +83,6 @@ class AudioManager:
             if ui_model == "Select a model...":
                 self.event_bus.publish("visualizer_error", "Choose a model")
                 return
-
             if "Local" in ui_model:
                 if not local_whisper.is_installed(ui_model):
                     self.event_bus.publish("visualizer_error", "Choose a model")
@@ -96,10 +95,23 @@ class AudioManager:
         if not self.app_state.audio.pyaudio_instance:
             if not self.initialize(): return
 
-        self.event_bus.publish("recording_started", None)
+        try:
+            pre_stream = self._pyaudio_instance.open(
+                format=AppConfig.AUDIO_FORMAT,
+                channels=AppConfig.AUDIO_CHANNELS,
+                rate=AppConfig.AUDIO_RATE,
+                input=True,
+                frames_per_buffer=AppConfig.AUDIO_CHUNK,
+            )
+            self._audio_stream = pre_stream
+        except Exception:
+            logger.exception("Failed to pre-open audio stream")
+            return
 
         if self.app_state.audio.sound_enabled:
             self.sound_manager.play("beep_on")
+
+        self.event_bus.publish("recording_started", None)
 
         self.app_state.is_busy = True
         self.app_state.audio.is_recording = True
@@ -118,14 +130,7 @@ class AudioManager:
     def _record_audio_worker(self, filename: str) -> None:
         frames = []
         try:
-            stream = self._pyaudio_instance.open(
-                format=AppConfig.AUDIO_FORMAT,
-                channels=AppConfig.AUDIO_CHANNELS,
-                rate=AppConfig.AUDIO_RATE,
-                input=True,
-                frames_per_buffer=AppConfig.AUDIO_CHUNK,
-            )
-            self._audio_stream = stream
+            stream = self._audio_stream
 
             while self.app_state.audio.is_recording:
                 data = stream.read(AppConfig.AUDIO_CHUNK, exception_on_overflow=False)
@@ -188,7 +193,6 @@ class TranscriptionService:
 
             logger.info("Transcription starting | Preset: %s | Model: %s | Lang: %s", ui_preset, ui_model, lang_iso)
 
-            # --- GESTION DES PROMPTS ---
             if ui_preset == "Email Draft":
                 prompt = (
                     "Transcribe this audio as a professional email. "
@@ -196,8 +200,13 @@ class TranscriptionService:
                     "Do not include filler words, silence markers, or meta-text like 'Subtitles by...'. "
                     "Format with a greeting, body paragraphs, and a sign-off."
                 )
+            elif ui_preset == "Equation":
+                prompt = (
+                    "Math dictation. Symbols, equations, variables, Greek letters, "
+                    "fractions, integrals, superscripts, subscripts. "
+                    "Example: integral from zero to infinity of x squared dx equals pi."
+                )
             else:
-                # Mode classique : aucun prompt d'instruction pour éviter les hallucinations et traductions
                 prompt = ""
                 
             if self.vocabulary_manager:
@@ -277,19 +286,57 @@ class TranscriptionService:
 
             if ui_preset == "Email Draft":
                 result = self._format_as_email(result, lang_iso)
+            elif ui_preset == "Equation":
+                result = self._convert_to_latex(result)
 
             return result
 
-        except Exception:
+        except Exception as e:
             logger.exception("Internal transcription error")
-            return "❌ Internal error during transcription."
+            return f"❌ Internal error during transcription: {e}"
+
+    def _convert_to_latex(self, text: str) -> str:
+        text = text.strip()
+        if not text:
+            return text
+
+        client = self._get_groq_client()
+        if not client:
+            return "⚠️ Error: Groq API key missing for Equation mode."
+
+        system_prompt = (
+            "You are a highly accurate audio-to-LaTeX converter. "
+            "Convert the user's spoken math dictation into clean, valid LaTeX code. "
+            "Output ONLY the raw LaTeX code. Do not include markdown formatting like ```latex. "
+            "Do not include any explanations, greetings, or filler text. "
+            "Distinguish carefully between spoken words meant for the equation and conversational filler. "
+            "Do not wrap the output in \\[ or $$ unless explicitly requested by the user."
+        )
+
+        try:
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": text}
+                ],
+                model="llama-3.1-8b-instant",
+                temperature=0.0,
+            )
+            latex_result = chat_completion.choices[0].message.content.strip()
+
+            if latex_result.startswith("```latex"):
+                latex_result = latex_result[8:]
+            elif latex_result.startswith("```"):
+                latex_result = latex_result[3:]
+            if latex_result.endswith("```"):
+                latex_result = latex_result[:-3]
+
+            return latex_result.strip()
+        except Exception as e:
+            logger.exception("LLM conversion to LaTeX failed")
+            return f"⚠️ LLM Error: {str(e)}"
 
     def _format_as_email(self, text: str, lang_iso: str) -> str:
-        """
-        Formate le texte transcrit en email professionnel.
-        Logique universelle ne dépendant pas de dictionnaires de vocabulaire.
-        Fonctionne pour TOUTES les langues.
-        """
         text = text.strip()
         if not text:
             return text
@@ -298,16 +345,12 @@ class TranscriptionService:
         if not sentences:
             return text
 
-
         first_sent = sentences[0]
         first_sent_clean = first_sent.lower().strip('.,;:!?')
         
-
         has_greeting = False
         words_first = first_sent_clean.split()
-        
         if len(words_first) <= 4:
-
             if first_sent.endswith((',', ':', '!')) or len(words_first) <= 2:
                 has_greeting = True
 
@@ -317,11 +360,9 @@ class TranscriptionService:
         
         has_signoff = False
         if len(words_last) <= 5:
-
             if last_sent.endswith(('.', ',')) or len(words_last) <= 3:
                 has_signoff = True
         
-        # 4. Extraire le corps
         body_sentences = sentences[:]
         greeting = ""
         signoff = ""
@@ -334,14 +375,11 @@ class TranscriptionService:
             signoff = last_sent
             body_sentences = body_sentences[:-1]
         
-
         greeting = greeting or self._default_greeting(lang_iso)
         signoff = signoff or self._default_signoff(lang_iso)
         
-
         formatted_body = self._format_body_paragraphs(body_sentences, lang_iso)
         
-        # 7. Assembler
         parts = [greeting]
         parts.extend(formatted_body)
         parts.append(signoff)
@@ -349,81 +387,32 @@ class TranscriptionService:
         return "\n\n".join(parts)
 
     def _default_greeting(self, lang_iso: str) -> str:
-        """Retourne une salutation par défaut selon la langue."""
-
         greetings = {
-            "fr": "Bonjour,",
-            "en": "Hello,",
-            "es": "Hola,",
-            "de": "Hallo,",
-            "it": "Buongiorno,",
-            "pt": "Olá,",
-            "nl": "Hallo,",
-            "pl": "Dzień dobry,",
-            "ru": "Здравствуйте,",
-            "zh": "您好，",
-            "ja": "こんにちは、",
-            "ko": "안녕하세요,",
-            "ar": "مرحباً،",
-            "hi": "नमस्ते,",
-            "tr": "Merhaba,",
-            "sv": "Hej,",
-            "da": "Hej,",
-            "no": "Hei,",
-            "fi": "Hei,",
-            "cs": "Dobrý den,",
-            "hu": "Tisztelt Címzett!",
-            "el": "Γεια σας,",
-            "he": "שלום,",
-            "th": "สวัสดีครับ/ค่ะ,",
-            "vi": "Xin chào,",
-            "id": "Halo,",
-            "ms": "Helo,",
-            "uk": "Вітаю,",
-            "ro": "Bună ziua,",
+            "fr": "Bonjour,", "en": "Hello,", "es": "Hola,", "de": "Hallo,",
+            "it": "Buongiorno,", "pt": "Olá,", "nl": "Hallo,", "pl": "Dzień dobry,",
+            "ru": "Здравствуйте,", "zh": "您好，", "ja": "こんにちは、", "ko": "안녕하세요,",
+            "ar": "مرحباً،", "hi": "नमस्ते,", "tr": "Merhaba,", "sv": "Hej,",
+            "da": "Hej,", "no": "Hei,", "fi": "Hei,", "cs": "Dobrý den,",
+            "hu": "Tisztelt Címzett!", "el": "Γεια σας,", "he": "שלום,", "th": "สวัสดีครับ/ค่ะ,",
+            "vi": "Xin chào,", "id": "Halo,", "ms": "Helo,", "uk": "Вітаю,", "ro": "Bună ziua,"
         }
         return greetings.get(lang_iso, "Hello,")
 
     def _default_signoff(self, lang_iso: str) -> str:
-        """Retourne une formule de politesse par défaut selon la langue."""
         signoffs = {
-            "fr": "Cordialement,",
-            "en": "Best regards,",
-            "es": "Saludos cordiales,",
-            "de": "Mit freundlichen Grüßen,",
-            "it": "Cordiali saluti,",
-            "pt": "Atenciosamente,",
-            "nl": "Met vriendelijke groet,",
-            "pl": "Z poważaniem,",
-            "ru": "С уважением,",
-            "zh": "此致敬礼，",
-            "ja": "よろしくお願いいたします。",
-            "ko": "감사합니다.",
-            "ar": "مع التحية،",
-            "hi": "धन्यवाद,",
-            "tr": "Saygılarımla,",
-            "sv": "Med vänliga hsningar,",
-            "da": "Med venlig hilsen,",
-            "no": "Med vennlig hilsen,",
-            "fi": "Ystävällisin terveisin,",
-            "cs": "S pozdravem,",
-            "hu": "Üdvözlettel,",
-            "el": "Με εκτίμηση,",
-            "he": "בברכה,",
-            "th": "ด้วยความเคารพ,",
-            "vi": "Trân trọng,",
-            "id": "Hormat saya,",
-            "ms": "Yang benar,",
-            "uk": "З повагою,",
-            "ro": "Cu stimă,",
+            "fr": "Cordialement,", "en": "Best regards,", "es": "Saludos cordiales,",
+            "de": "Mit freundlichen Grüßen,", "it": "Cordiali saluti,", "pt": "Atenciosamente,",
+            "nl": "Met vriendelijke groet,", "pl": "Z poważaniem,", "ru": "С уважением,",
+            "zh": "此致敬礼，", "ja": "よろしくお願いいたします。", "ko": "감사합니다.",
+            "ar": "مع التحية，", "hi": "धन्यवाद,", "tr": "Saygılarımla,", "sv": "Med vänliga hsningar,",
+            "da": "Med venlig hilsen,", "no": "Med vennlig hilsen,", "fi": "Ystävällisin terveisin,",
+            "cs": "S pozdravem,", "hu": "Üdvözlettel,", "el": "Με εκτίμηση,", "he": "בברכה,",
+            "th": "ด้วยความเคารพ,", "vi": "Trân trọng,", "id": "Hormat saya,", "ms": "Yang benar,",
+            "uk": "З повагою,", "ro": "Cu stimă,"
         }
         return signoffs.get(lang_iso, "Best regards,")
 
     def _format_body_paragraphs(self, sentences: list, lang_iso: str) -> list:
-        """
-        Formate les phrases du corps en paragraphes logiques.
-        Universel : repose sur la structure sémantique, pas sur des mots-clés.
-        """
         if not sentences:
             return []
         
@@ -443,17 +432,14 @@ class TranscriptionService:
         
         for i, sentence in enumerate(sentences):
             sent_lower = sentence.lower().strip()
-            
             is_transition = any(re.search(pattern, sent_lower) for pattern in transition_patterns)
             
-
             if (is_transition and current_para) or len(current_para) >= para_size_target:
                 paragraphs.append(" ".join(current_para))
                 current_para = [sentence]
             else:
                 current_para.append(sentence)
         
-
         if current_para:
             paragraphs.append(" ".join(current_para))
         
@@ -509,13 +495,9 @@ class TranscriptionManager:
         self.event_bus.publish("recording_stopped", None)
 
         def _process_transcription():
+            self.event_bus.publish("processing_started", None)
             try:
                 time.sleep(0.05)
-                
-                if self.app_state.audio.sound_enabled:
-                    self.sound_manager.play("beep_off")
-                    
-                time.sleep(0.35) 
                 
                 self.app_state.audio.is_recording = False
                 self.audio_manager.wait_for_recording()
@@ -549,17 +531,23 @@ class TranscriptionManager:
                             method=used_method
                         )
 
+                        if self.app_state.audio.sound_enabled:
+                            self.sound_manager.play("beep_off")
+
+                        time.sleep(0.2) 
+
                         if self._previous_active_window:
                             try:
                                 win32gui.SetForegroundWindow(self._previous_active_window)
-                                time.sleep(0.1)
+                                time.sleep(0.15)
                             except Exception: pass
-                        
+
                         self.clipboard_manager.paste_and_clear(text)
                 
             except Exception as e:
                 logger.error(f"FATAL THREAD ERROR: {e}")
             finally:
+                self.event_bus.publish("processing_finished", None)
                 self.app_state.is_busy = False
                 self._is_stopping = False
                 tracker.step("Process finished (cleaned up)")
