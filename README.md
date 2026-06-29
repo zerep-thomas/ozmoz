@@ -129,7 +129,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - **Systran** and the `faster-whisper` team for the optimized inference engine.
 - **Groq** for their fast cloud inference API.
 - **Qt/QML** for the powerful UI framework.
-
-```
-
-```
