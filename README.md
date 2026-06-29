@@ -24,12 +24,21 @@ Ozmoz was created to meet the need for speed and privacy for users, especially s
 
 The process can be done in the cloud via Groq if you need extreme speed, or locally if you want better confidentiality. In both cases, OpenAI's Whisper models are used.
 
+## Transcription Modes
+
+Ozmoz includes specialized presets to format your transcription automatically based on your current task:
+
+- **Voice to Text (Default):** Standard, real-time transcription. Ideal for quick note-taking, chatting, and general document editing. It pastes your exact words directly at your cursor position with zero post-processing.
+- **Email Draft:** Structures raw, spoken thoughts into a professional email. It automatically organizes the text into logical body paragraphs and inserts appropriate context-aware greetings (e.g., "Hello," / "Bonjour,") and formal sign-offs (e.g., "Best regards," / "Cordialement,") matching your selected transcription language.
+- **Equation (LaTeX):** Specifically designed for dictating mathematical formulas and technical notations. It filters out conversational filler and accurately parses dictated mathematical terms (such as variables, fractions, integrals, and Greek letters) into clean, standard LaTeX syntax.
+  - _Note: This mode requires an active Groq API Key as it utilizes a cloud-based LLM to perform the conversion._
+
 ## Features
 
 - **Global Push-to-Talk**: Use `Ctrl + Space` anywhere in Windows to start dictating.
 - **Cloud Transcription**: Uses Groq's API for near-instant results with `Whisper V3` and `Whisper V3 Turbo`.
 - **Local Transcription**: Runs `Faster-Whisper` entirely offline on your CPU or GPU. Models (Base, Small, Turbo, Distil) can be downloaded directly from the app's interface.
-- **Custom Modes**: Create presets tailored to your workflow. For example, the "Email Draft" mode automatically formats your speech into a structured professional email with greetings and sign-offs.
+- **Custom Modes**: Create personalized presets tailored to your workflow by combining custom names, target languages, and underlying voice models.
 - **History & Statistics**: Keep track of your past transcriptions, view detailed stats (words per minute, time saved), and search through your history.
 - **Custom Vocabulary**: Add specific names, acronyms, or industry terms to improve transcription accuracy.
 - **System Tray Integration**: Runs quietly in the background and can be opened with a single click.
@@ -83,7 +92,7 @@ To compile the application into a standalone `.exe` using PyInstaller:
 1. Ensure `ffmpeg.exe` and `ffprobe.exe` are in the root directory.
 2. Run the following command:
    ```bash
-   pyinstaller ozmoz.spec --noconfirm
+   pyinstaller ozmoz.spec --oneline
    ```
 3. The compiled application will be available in the `dist/ozmoz/` folder.
 
@@ -95,7 +104,7 @@ Ozmoz is built as a native Windows application combining:
 - **Backend**: Python for system integration, audio processing, and API communication.
 - **Core Libraries**:
   - `faster-whisper`: Local speech recognition with CTranslate2 optimization.
-  - `groq`: Cloud speech recognition API.
+  - `groq`: Cloud speech recognition API and LLM translation.
   - `PyAudio` & `pydub`: Audio capture and processing.
   - `pynput` & `win32gui`: Global hotkeys and active window management.
   - `win32crypt`: Secure DPAPI encryption for API keys.
@@ -120,3 +129,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - **Systran** and the `faster-whisper` team for the optimized inference engine.
 - **Groq** for their fast cloud inference API.
 - **Qt/QML** for the powerful UI framework.
+
+```
+
+```
