@@ -92,7 +92,7 @@ To compile the application into a standalone `.exe` using PyInstaller:
 1. Ensure `ffmpeg.exe` and `ffprobe.exe` are in the root directory.
 2. Run the following command:
    ```bash
-   pyinstaller ozmoz.spec --oneline
+   pyinstaller ozmoz.spec --noconfirm
    ```
 3. The compiled application will be available in the `dist/ozmoz/` folder.
 
