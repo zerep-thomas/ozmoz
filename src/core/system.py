@@ -1,6 +1,8 @@
 import logging
 import threading
+import time
 from typing import Callable, Final, Protocol, TypeAlias, cast
+from concurrent.futures import ThreadPoolExecutor
 
 from pynput import keyboard as pynput_keyboard
 from pynput.keyboard import Key, KeyCode
@@ -14,13 +16,20 @@ ConditionCallback: TypeAlias = Callable[[], bool]
 
 HOTKEY_THREAD_NAME_PREFIX: Final[str] = "HotkeyAction"
 
+global_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="OzmozWorker")
+
+
 class AudioManagerProtocol(Protocol):
     def start_recording(self) -> None: ...
+
 
 class TranscriptionManagerProtocol(Protocol):
     def stop_recording_and_transcribe(self) -> None: ...
 
-class HotkeyRegistrationError(Exception): pass
+
+class HotkeyRegistrationError(Exception):
+    pass
+
 
 class DualModeHotKey:
     def __init__(
@@ -30,31 +39,32 @@ class DualModeHotKey:
         on_deactivate: SimpleCallback | None = None,
     ) -> None:
         self._trigger_keys = {self._normalize_key(k) for k in trigger_keys}
-        self._currently_pressed_keys: set[PynputKey] = set()
+        self._currently_pressed_keys: dict[PynputKey, float] = {}
         self._on_activate = on_activate
         self._on_deactivate = on_deactivate
         self._is_active = False
 
     def _normalize_key(self, key: PynputKey) -> PynputKey:
-        """
-        Normalise les touches pour éviter les conflits entre les touches
-        gauche/droite (ex: ctrl_l -> ctrl) et unifie l'espace.
-        """
         if hasattr(key, 'name') and key.name:
             base_name = key.name.split('_')[0]
             if hasattr(Key, base_name):
                 return getattr(Key, base_name)
-        
+
         if hasattr(key, 'char') and key.char == ' ':
             return Key.space
-            
+
         return key
 
     def press(self, key: PynputKey) -> None:
+        now = time.time()
+        self._currently_pressed_keys = {
+            k: ts for k, ts in self._currently_pressed_keys.items() if now - ts < 5.0
+        }
+
         key = self._normalize_key(key)
         if key in self._trigger_keys:
-            self._currently_pressed_keys.add(key)
-            if self._currently_pressed_keys == self._trigger_keys:
+            self._currently_pressed_keys[key] = now
+            if set(self._currently_pressed_keys.keys()) == self._trigger_keys:
                 if not self._is_active:
                     self._is_active = True
                     if self._on_activate:
@@ -63,11 +73,12 @@ class DualModeHotKey:
     def release(self, key: PynputKey) -> None:
         key = self._normalize_key(key)
         if key in self._trigger_keys:
-            self._currently_pressed_keys.discard(key)
+            self._currently_pressed_keys.pop(key, None)
             if self._is_active:
                 self._is_active = False
                 if self._on_deactivate:
                     self._on_deactivate()
+
 
 class EventBus:
     def __init__(self) -> None:
@@ -81,15 +92,21 @@ class EventBus:
                 self._subscribers[event_type] = []
             self._subscribers[event_type].append(callback)
 
-    def publish(self, event_type: str, data: object = None) -> None:
+    def publish(self, event_type: str, data: object = None, threaded: bool = True) -> None:
         with self._lock:
             callbacks = self._subscribers.get(event_type, [])[:]
         for callback in callbacks:
-            try:
-                thread = threading.Thread(target=callback, args=(data,), daemon=True, name=f"EventBus-{event_type}")
-                thread.start()
-            except Exception:
-                self._logger.exception("EventBus callback execution failed")
+            if threaded:
+                global_executor.submit(self._safe_call, callback, data, event_type)
+            else:
+                self._safe_call(callback, data, event_type)
+
+    def _safe_call(self, callback: EventCallback, data: object, event_type: str) -> None:
+        try:
+            callback(data)
+        except Exception:
+            self._logger.exception("EventBus callback execution failed for event: %s", event_type)
+
 
 class HotkeyManager:
     _SPECIAL_KEYS_MAP: Final[dict[str, str]] = {
@@ -106,10 +123,10 @@ class HotkeyManager:
         self._listener = None
         self._registered_hotkeys = []
         self._logger = logging.getLogger(__name__)
-        self._thread_counter = 0
 
     def _convert_to_pynput_format(self, combination_string: str) -> str:
-        if not combination_string: return ""
+        if not combination_string:
+            return ""
         parts = combination_string.lower().split("+")
         formatted_parts = []
         for part in parts:
@@ -125,12 +142,13 @@ class HotkeyManager:
     def _execute_action_safely(self, action_callback, condition_callback=None):
         def worker():
             try:
-                if condition_callback and not condition_callback(): return
-                if action_callback: action_callback()
+                if condition_callback and not condition_callback():
+                    return
+                if action_callback:
+                    action_callback()
             except Exception:
                 self._logger.exception("Action failed")
-        self._thread_counter += 1
-        threading.Thread(target=worker, daemon=True, name=f"{HOTKEY_THREAD_NAME_PREFIX}-{self._thread_counter}").start()
+        global_executor.submit(worker)
 
     def stop_listening(self):
         if self._listener:
@@ -183,7 +201,9 @@ class HotkeyManager:
             raise HotkeyRegistrationError(f"Listener error: {error}")
 
     def _handle_press(self, key: PynputKey) -> None:
-        for hk in self._registered_hotkeys: hk.press(key)
+        for hk in self._registered_hotkeys:
+            hk.press(key)
 
     def _handle_release(self, key: PynputKey) -> None:
-        for hk in self._registered_hotkeys: hk.release(key)
+        for hk in self._registered_hotkeys:
+            hk.release(key)

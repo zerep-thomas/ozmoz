@@ -7,19 +7,25 @@ import win32crypt
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
-from src.core.utils import PathManager
+import pywintypes
+
+from src.core.utils import PathManager, atomic_write_json
 
 logger = logging.getLogger(__name__)
+
+DPAPI_ENTROPY = b"Ozmoz_DPAPI_Salt_2026!_"
+
 
 def get_portable_data_dir() -> Path:
     if getattr(sys, 'frozen', False):
         base_dir = Path(sys.executable).resolve().parent
     else:
         base_dir = Path.cwd()
-    
+
     data_dir = base_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
+
 
 class CredentialManager:
     """Manages secure storage and retrieval of API keys using Windows DPAPI."""
@@ -27,7 +33,7 @@ class CredentialManager:
     def __init__(self):
         self.filepath = get_portable_data_dir() / "credentials.json"
         if not self.filepath.exists():
-            self.filepath.write_text("{}", encoding="utf-8")
+            atomic_write_json(self.filepath, {})
 
     def get_api_key(self, service: str) -> Optional[str]:
         try:
@@ -38,28 +44,39 @@ class CredentialManager:
             
             try:
                 decoded = base64.b64decode(encrypted_key)
-                decrypted = win32crypt.CryptUnprotectData(decoded, None, None, None, 0)[1]
+                decrypted = win32crypt.CryptUnprotectData(decoded, DPAPI_ENTROPY, None, None, 0)[1]
                 return decrypted.decode('utf-8')
+            except pywintypes.error as e:
+                # Si erreur 13 (Données non valides), c'est une ancienne clé sans entropie
+                if getattr(e, 'winerror', 0) == 13 or (isinstance(e.args, tuple) and e.args[0] == 13):
+                    logger.info("Legacy key format detected for %s. The key must be re-entered in the settings.", service)
+                else:
+                    logger.debug("Minor DPAPI error: %s", e)
+                return None
             except Exception:
-                logger.warning("Failed to decrypt API key for service: %s", service)
+                logger.debug("Failed to decrypt API key for service: %s", service, exc_info=True)
                 return None
         except Exception:
-            logger.exception("Failed to read credentials file")
+            logger.debug("Credentials file is missing or corrupted.")
             return None
 
     def save_api_key(self, service: str, key: str) -> None:
         try:
             data = json.loads(self.filepath.read_text(encoding="utf-8"))
         except Exception:
+            logger.debug("Credentials file corrupted or missing, resetting.", exc_info=True)
             data = {}
-            
+
         if key:
-            encrypted_bytes = win32crypt.CryptProtectData(key.encode('utf-8'), None, None, None, None, 0)
+            encrypted_bytes = win32crypt.CryptProtectData(
+                key.encode('utf-8'), None, DPAPI_ENTROPY, None, None, 0
+            )
             data[service] = base64.b64encode(encrypted_bytes).decode('utf-8')
         else:
             data[service] = ""
-            
-        self.filepath.write_text(json.dumps(data, indent=4), encoding="utf-8")
+
+        atomic_write_json(self.filepath, data)
+
 
 class HistoryManager:
     """Manages the storage and retrieval of transcription history."""
@@ -68,12 +85,13 @@ class HistoryManager:
         self.filepath = get_portable_data_dir() / "history.json"
         self.event_bus = event_bus
         if not self.filepath.exists():
-            self.filepath.write_text("[]", encoding="utf-8")
+            atomic_write_json(self.filepath, [])
 
     def add_entry(self, text: str, duration_sec: float, processing_sec: float, method: str) -> None:
         try:
             data = json.loads(self.filepath.read_text(encoding="utf-8"))
         except Exception:
+            logger.debug("History file corrupted or missing, resetting.", exc_info=True)
             data = []
 
         entry = {
@@ -86,7 +104,10 @@ class HistoryManager:
             "method": method
         }
         data.append(entry)
-        self.filepath.write_text(json.dumps(data, indent=4, ensure_ascii=False), encoding="utf-8")
+        if len(data) > 5000:
+            data = data[-5000:]
+
+        atomic_write_json(self.filepath, data)
 
         if self.event_bus:
             self.event_bus.publish("history_updated", None)
@@ -95,9 +116,9 @@ class HistoryManager:
         try:
             data = json.loads(self.filepath.read_text(encoding="utf-8"))
             new_data = [item for item in data if item.get("id") != entry_id]
-            
+
             if len(new_data) != len(data):
-                self.filepath.write_text(json.dumps(new_data, indent=4, ensure_ascii=False), encoding="utf-8")
+                atomic_write_json(self.filepath, new_data)
                 if self.event_bus:
                     self.event_bus.publish("history_updated", None)
         except Exception:
@@ -108,6 +129,7 @@ class HistoryManager:
             return json.loads(self.filepath.read_text(encoding="utf-8"))
         except Exception:
             return []
+
 
 class StatsManager:
     """Calculates usage statistics based on history."""
@@ -154,6 +176,7 @@ class StatsManager:
             "wordsThisWeek": str(words_this_week),
             "timeSaved": f"{time_saved_min} minutes"
         }
+
 
 class ChangelogManager:
     """Reads the changelog file."""

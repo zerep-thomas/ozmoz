@@ -15,11 +15,13 @@ from typing import Any, Optional
 
 import requests
 from faster_whisper import WhisperModel
+
 from src.core.utils import PathManager
 
 DOWNLOAD_CHUNK_SIZE = 16384
 DOWNLOAD_TIMEOUT_SECONDS = 30
-CPU_INFERENCE_THREADS = 4
+
+CPU_INFERENCE_THREADS = max(1, min(4, (os.cpu_count() or 4) - 1))
 VAD_MIN_SILENCE_MS = 300
 ALLOWED_DOWNLOAD_DOMAIN = "huggingface.co"
 
@@ -44,11 +46,12 @@ MODELS_CONFIG: dict[str, dict[str, Any]] = {
     }
 }
 
+
 class LocalWhisperManager:
     def __init__(self) -> None:
         root_dir = Path(__file__).resolve().parent.parent.parent
         self.base_models_directory: Path = root_dir / "data" / "models"
-        
+
         self.model_instance: Optional[WhisperModel] = None
         self.is_loading: bool = False
         self._lock: threading.Lock = threading.Lock()
@@ -69,9 +72,11 @@ class LocalWhisperManager:
     def setup_portable_cuda(self) -> None:
         try:
             site_packages = next((p for p in sys.path if "site-packages" in p and os.path.isdir(p)), None)
-            if not site_packages: return
+            if not site_packages:
+                return
             nvidia_path = Path(site_packages) / "nvidia"
-            if not nvidia_path.exists(): return
+            if not nvidia_path.exists():
+                return
 
             for root, dirs, _ in os.walk(nvidia_path):
                 root_path = Path(root)
@@ -80,7 +85,7 @@ class LocalWhisperManager:
                 if "lib" in dirs:
                     os.environ["PATH"] = str(root_path / "lib") + os.pathsep + os.environ.get("PATH", "")
         except Exception:
-            pass
+            logger.debug("Setup portable cuda failed", exc_info=True)
 
     def _detect_cuda_support(self) -> None:
         self.setup_portable_cuda()
@@ -89,11 +94,12 @@ class LocalWhisperManager:
             self.has_cuda = ctypes.util.find_library("zlibwapi") is not None
         except Exception:
             self.has_cuda = False
+            logger.debug("Detect CUDA support failed", exc_info=True)
 
     def is_installed(self, model_name: str) -> bool:
         try:
             model_dir = self._get_model_directory(model_name)
-            if not model_dir.exists(): 
+            if not model_dir.exists():
                 return False
             for file_name in MODELS_CONFIG[model_name]["files"]:
                 f_path = model_dir / file_name
@@ -101,6 +107,7 @@ class LocalWhisperManager:
                     return False
             return True
         except Exception:
+            logger.debug("is_installed failed to check", exc_info=True)
             return False
 
     def download(self, model_name: str, progress_callback=None) -> bool:
@@ -109,11 +116,12 @@ class LocalWhisperManager:
             return False
 
         with self._lock:
-            if self.is_loading: return False
+            if self.is_loading:
+                return False
             self.is_loading = True
 
         logger.info("Starting download: %s", model_name)
-        
+
         try:
             model_config = MODELS_CONFIG[model_name]
             repo_id = model_config["repo_id"]
@@ -129,13 +137,17 @@ class LocalWhisperManager:
                     total_expected_bytes += int(resp.headers.get("Content-Length", 0))
                 except Exception:
                     pass
-            
+
             downloaded_bytes = 0
             for filename in files_to_download:
                 dest_path = target_dir / filename
+                tmp_path = dest_path.with_suffix('.tmp')
+
                 if dest_path.exists():
                     downloaded_bytes += dest_path.stat().st_size
-                    
+                elif tmp_path.exists():
+                    downloaded_bytes += tmp_path.stat().st_size
+
             if progress_callback and total_expected_bytes > 0:
                 progress_callback(min(downloaded_bytes / total_expected_bytes, 1.0))
 
@@ -144,29 +156,41 @@ class LocalWhisperManager:
             for filename in files_to_download:
                 url = f"https://{ALLOWED_DOWNLOAD_DOMAIN}/{repo_id}/resolve/main/{filename}"
                 dest_path = target_dir / filename
-                existing_size = dest_path.stat().st_size if dest_path.exists() else 0
+                tmp_path = dest_path.with_suffix('.tmp')
+
+                if dest_path.exists():
+                    continue
+
+                existing_size = tmp_path.stat().st_size if tmp_path.exists() else 0
 
                 headers = {}
-                if existing_size > 0: headers["Range"] = f"bytes={existing_size}-"
+                if existing_size > 0:
+                    headers["Range"] = f"bytes={existing_size}-"
 
-                response = requests.get(url, headers=headers, stream=True, timeout=DOWNLOAD_TIMEOUT_SECONDS, allow_redirects=True)
-                
-                if response.status_code == 416: 
+                response = requests.get(
+                    url, headers=headers, stream=True,
+                    timeout=DOWNLOAD_TIMEOUT_SECONDS, allow_redirects=True
+                )
+
+                if response.status_code == 416:
+                    os.replace(tmp_path, dest_path)
                     continue
                 response.raise_for_status()
 
                 mode = "ab" if existing_size > 0 else "wb"
-                with dest_path.open(mode) as f:
+                with tmp_path.open(mode) as f:
                     for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                         if chunk:
                             f.write(chunk)
                             downloaded_bytes += len(chunk)
-                            
+
                             if progress_callback and total_expected_bytes > 0:
                                 current_progress = min(downloaded_bytes / total_expected_bytes, 1.0)
                                 if current_progress - last_progress_emit >= 0.02 or current_progress == 1.0:
                                     progress_callback(current_progress)
                                     last_progress_emit = current_progress
+
+                os.replace(tmp_path, dest_path)
 
             logger.info("Download completed: %s", model_name)
             return True
@@ -179,10 +203,10 @@ class LocalWhisperManager:
                 self.is_loading = False
 
     def load(self, model_name: str) -> bool:
-        if not self.is_installed(model_name): 
+        if not self.is_installed(model_name):
             logger.warning("Cannot load, %s is not fully downloaded.", model_name)
             return False
-            
+
         if self._current_loaded_model_name == model_name and self.model_instance is not None:
             return True
 
@@ -190,21 +214,26 @@ class LocalWhisperManager:
         gc.collect()
         self.setup_portable_cuda()
         model_dir = self._get_model_directory(model_name)
-        
+
         logger.info("Loading model into memory: %s", model_name)
 
         if self.has_cuda:
             try:
-                self.model_instance = WhisperModel(str(model_dir), device="cuda", compute_type="float16", local_files_only=True)
+                self.model_instance = WhisperModel(
+                    str(model_dir), device="cuda", compute_type="float16", local_files_only=True
+                )
                 self._current_loaded_model_name = model_name
                 logger.info("Model loaded successfully on GPU (CUDA)")
                 return True
             except Exception:
-                logger.warning("CUDA failed, falling back to CPU")
+                logger.warning("CUDA failed, falling back to CPU", exc_info=True)
                 self.has_cuda = False
 
         try:
-            self.model_instance = WhisperModel(str(model_dir), device="cpu", compute_type="int8", cpu_threads=CPU_INFERENCE_THREADS, local_files_only=True)
+            self.model_instance = WhisperModel(
+                str(model_dir), device="cpu", compute_type="int8",
+                cpu_threads=CPU_INFERENCE_THREADS, local_files_only=True
+            )
             self._current_loaded_model_name = model_name
             logger.info("Model loaded successfully on CPU")
             return True
@@ -212,10 +241,13 @@ class LocalWhisperManager:
             logger.exception("Failed to load model on CPU")
             return False
 
-    def transcribe(self, audio_file_path: str, language: str = "en", model_name: str = "Local Whisper Base", prompt: str = "") -> str:
-        if not self.load(model_name): 
+    def transcribe(
+        self, audio_file_path: str, language: str = "en",
+        model_name: str = "Local Whisper Base", prompt: str = ""
+    ) -> str:
+        if not self.load(model_name):
             return "❌ Error: Local model not loaded."
-        
+
         logger.info("Local transcription in progress...")
         try:
             segments, info = self.model_instance.transcribe(
@@ -253,5 +285,6 @@ class LocalWhisperManager:
         except Exception:
             logger.exception("Failed to delete %s", model_name)
             return False
+
 
 local_whisper = LocalWhisperManager()

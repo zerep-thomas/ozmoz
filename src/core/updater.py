@@ -1,9 +1,15 @@
 import logging
-import threading
 import requests
+
 from src.core.config import AppConfig
+from src.core.system import global_executor
 
 logger = logging.getLogger(__name__)
+
+
+def _version_tuple(v: str) -> tuple:
+    return tuple(int(p) for p in v.lstrip('v').split(".") if p.isdigit())
+
 
 class UpdateManager:
     """Checks for new application versions on GitHub."""
@@ -18,23 +24,21 @@ class UpdateManager:
     def check_for_updates(self):
         if self.is_checking:
             return
-        
+
         self.is_checking = True
         self.event_bus.publish("update_check_started")
-        
+
         def _check_worker():
             try:
                 response = requests.get(AppConfig.GITHUB_RELEASES_URL, timeout=10)
                 response.raise_for_status()
                 data = response.json()
-                
+
                 self.latest_version = data.get("tag_name", "").lstrip('v')
                 self.release_url = data.get("html_url")
-                
-                current_version = AppConfig.VERSION
-                
+
                 if self.latest_version and self.release_url:
-                    if self.latest_version > current_version:
+                    if _version_tuple(self.latest_version) > _version_tuple(AppConfig.VERSION):
                         self.last_check_result = "available"
                         self.event_bus.publish("update_available", {
                             "version": self.latest_version,
@@ -58,4 +62,4 @@ class UpdateManager:
                 self.is_checking = False
                 self.event_bus.publish("update_check_finished")
 
-        threading.Thread(target=_check_worker, daemon=True, name="UpdateChecker").start()
+        global_executor.submit(_check_worker)

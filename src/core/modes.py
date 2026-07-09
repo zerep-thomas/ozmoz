@@ -1,7 +1,9 @@
 import json
 import logging
 from pathlib import Path
+
 from src.core.data import get_portable_data_dir
+from src.core.utils import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +16,10 @@ DEFAULT_MODES = {
     }
 }
 
+
 class ModeManager:
-    """Gère le stockage et la lecture des configurations de modes (ex: Default mode)."""
+    """Manages the storage and reading of mode configurations (e.g., Default mode)."""
+
     def __init__(self, event_bus=None):
         self.filepath = get_portable_data_dir() / "modes.json"
         self.event_bus = event_bus
@@ -27,20 +31,17 @@ class ModeManager:
             try:
                 self._modes = json.loads(self.filepath.read_text(encoding="utf-8"))
             except Exception as e:
-                logger.error(f"Erreur de lecture de modes.json : {e}")
+                logger.error(f"Error reading modes.json: {e}", exc_info=True)
                 self._modes = DEFAULT_MODES.copy()
         else:
             self._modes = DEFAULT_MODES.copy()
             self.save()
-            
+
         if "default" not in self._modes:
             self._modes["default"] = DEFAULT_MODES["default"].copy()
 
     def save(self):
-        try:
-            self.filepath.write_text(json.dumps(self._modes, indent=4), encoding="utf-8")
-        except Exception as e:
-            logger.error(f"Impossible de sauvegarder modes.json : {e}")
+        atomic_write_json(self.filepath, self._modes)
 
     def get_mode(self, mode_id="default"):
         return self._modes.get(mode_id, DEFAULT_MODES["default"])

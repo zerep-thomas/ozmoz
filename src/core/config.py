@@ -21,12 +21,13 @@ GROQ_MODEL_MAPPING: dict[str, str] = {
 }
 
 SECRET_PATTERNS = [
-    re.compile(r"api[_-]?key['\"]?\s*[:=]\s*['\"]?([a-zA-Z0-9_\-]{20,})", re.IGNORECASE),
-    re.compile(r"token['\"]?\s*[:=]\s*['\"]?([a-zA-Z0-9_\-\.]{20,})", re.IGNORECASE),
+    re.compile(r"api[-]?key['\"]?\s*[:=]\s*['\"]?([a-zA-Z0-9-]{20,})", re.IGNORECASE),
+    re.compile(r"token['\"]?\s*[:=]\s*['\"]?([a-zA-Z0-9_\-/.]{20,})", re.IGNORECASE),
 ]
 
+
 class AppConfig:
-    VERSION: str = "1.0.1"
+    VERSION: str = "1.0.2"
     GITHUB_RELEASES_URL: str = "https://api.github.com/repos/zerep-thomas/ozmoz/releases/latest"
     AUDIO_CHUNK: int = AUDIO_CHUNK_SIZE
     AUDIO_FORMAT: int = AUDIO_BIT_FORMAT
@@ -37,9 +38,11 @@ class AppConfig:
         "record_toggle": "ctrl+space",
     }
 
+
 @dataclass
 class ThreadingState:
     keyboard_lock: threading.Lock = field(default_factory=threading.Lock)
+
 
 @dataclass
 class AudioState:
@@ -49,11 +52,13 @@ class AudioState:
     recording_start_time: float = 0.0
     sound_enabled: bool = True
 
+
 class AppState:
     def __init__(self) -> None:
         self.threading = ThreadingState()
         self.audio = AudioState()
         self.is_busy: bool = False
         self.hotkeys: dict[str, str] = AppConfig.DEFAULT_HOTKEYS.copy()
+
 
 app_state = AppState()

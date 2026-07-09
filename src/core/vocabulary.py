@@ -1,8 +1,11 @@
 import json
 import logging
+
 from src.core.data import get_portable_data_dir
+from src.core.utils import atomic_write_json
 
 logger = logging.getLogger(__name__)
+
 
 class VocabularyManager:
     """Manages custom vocabulary words for transcription."""
@@ -24,10 +27,11 @@ class VocabularyManager:
             else:
                 self._words = []
         except Exception:
+            logger.debug("Failed to load vocabulary.json", exc_info=True)
             self._words = []
 
     def _save(self) -> None:
-        self.filepath.write_text(json.dumps(self._words, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(self.filepath, self._words)
 
     def add_word(self, word: str) -> bool:
         word = word.strip()

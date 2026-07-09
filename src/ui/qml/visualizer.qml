@@ -63,12 +63,12 @@ Window {
             : Qt.rgba(1.0, 1.0, 1.0, 0.05)
         border.width: 1
 
-        // clip évite que les barres dépassent visuellement de la pill pendant la fermeture
+        // clip prevents bars from visually overflowing the pill during closing
         clip: true
 
         Behavior on width  { NumberAnimation { duration: 400; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-        // OutCubic sur la hauteur : pas d'overshoot, fermeture propre.
-        // L'effet "pop" à l'ouverture vient du width qui garde son OutBack.
+        // OutCubic on height: no overshoot, clean closing.
+        // The opening "pop" effect comes from width keeping its OutBack.
         Behavior on height { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
 
         Item {

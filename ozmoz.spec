@@ -11,13 +11,11 @@ ort_datas, ort_binaries, ort_hiddenimports = collect_all('onnxruntime')
 a = Analysis(
     ['run.py'],
     pathex=[],
-    binaries=fw_binaries + ort_binaries, # <--- MODIFIÉ ICI
+    binaries=fw_binaries + ort_binaries,
     datas=[
         ('src/ui/qml', 'src/ui/qml'),
         ('src/static/audio', 'src/static/audio'),
-        ('ffmpeg.exe', '.'),
-        ('ffprobe.exe', '.'),  
-        ('data', 'data'),
+        ('data/changelog.json', 'data'),
     ] + fw_datas + ort_datas,
 
     hiddenimports=[

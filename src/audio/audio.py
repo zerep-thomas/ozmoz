@@ -6,6 +6,7 @@ import threading
 import time
 import wave
 import re
+import uuid
 from pathlib import Path
 
 import numpy as np
@@ -16,7 +17,8 @@ from pydub import AudioSegment
 
 from src.core.config import AppConfig, AppState, GROQ_MODEL_MAPPING
 from src.core.utils import SuppressStderr, PerfTracker
-from src.audio.local_audio import local_whisper 
+from src.audio.local_audio import local_whisper
+from src.core.system import global_executor
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,7 @@ LANGUAGES_ISO = {
     "vietnamese": "vi", "welsh": "cy", "yiddish": "yi", "yoruba": "yo"
 }
 
+
 class AudioManager:
     def __init__(self, app_state, sound_manager, event_bus, mode_manager=None, credential_manager=None):
         self.app_state = app_state
@@ -55,7 +58,8 @@ class AudioManager:
         self._recording_thread = None
 
     def initialize(self) -> bool:
-        if self._pyaudio_instance: return True
+        if self._pyaudio_instance:
+            return True
         try:
             with SuppressStderr():
                 self._pyaudio_instance = pyaudio.PyAudio()
@@ -79,7 +83,7 @@ class AudioManager:
         if self.mode_manager and self.credential_manager:
             sys_cfg = self.mode_manager.get_mode("system")
             ui_model = sys_cfg.get("active_model", "Whisper V3 Turbo")
-            
+
             if ui_model == "Select a model...":
                 self.event_bus.publish("visualizer_error", "Choose a model")
                 return
@@ -93,7 +97,8 @@ class AudioManager:
                     return
 
         if not self.app_state.audio.pyaudio_instance:
-            if not self.initialize(): return
+            if not self.initialize():
+                return
 
         try:
             pre_stream = self._pyaudio_instance.open(
@@ -117,7 +122,6 @@ class AudioManager:
         self.app_state.audio.is_recording = True
         self.app_state.audio.recording_start_time = time.time()
 
-        import uuid
         temp_dir = Path(tempfile.gettempdir()).resolve()
         temp_path = temp_dir / f"ozmoz_rec_{uuid.uuid4().hex}.wav"
         self.app_state.audio.current_recording_path = str(temp_path)
@@ -131,11 +135,11 @@ class AudioManager:
         frames = []
         try:
             stream = self._audio_stream
-
             while self.app_state.audio.is_recording:
                 data = stream.read(AppConfig.AUDIO_CHUNK, exception_on_overflow=False)
                 frames.append(data)
-                self.event_bus.publish("audio_frame", data)
+
+                self.event_bus.publish("audio_frame", data, threaded=False)
         except Exception:
             logger.exception("Audio recording failed unexpectedly")
         finally:
@@ -147,11 +151,14 @@ class AudioManager:
                 self._write_wav_file(filename, frames)
 
     def _write_wav_file(self, filename: str, frames: list) -> None:
-        with wave.open(filename, "wb") as wave_file:
-            wave_file.setnchannels(AppConfig.AUDIO_CHANNELS)
-            wave_file.setsampwidth(self._pyaudio_instance.get_sample_size(AppConfig.AUDIO_FORMAT))
-            wave_file.setframerate(AppConfig.AUDIO_RATE)
-            wave_file.writeframes(b"".join(frames))
+        try:
+            with wave.open(filename, "wb") as wave_file:
+                wave_file.setnchannels(AppConfig.AUDIO_CHANNELS)
+                wave_file.setsampwidth(self._pyaudio_instance.get_sample_size(AppConfig.AUDIO_FORMAT))
+                wave_file.setframerate(AppConfig.AUDIO_RATE)
+                wave_file.writeframes(b"".join(frames))
+        except Exception:
+            logger.exception(f"Failed to write audio to {filename}")
 
     def wait_for_recording(self, timeout: float = 5.0) -> None:
         if self._recording_thread and self._recording_thread.is_alive():
@@ -170,7 +177,8 @@ class TranscriptionService:
 
     def _get_groq_client(self):
         api_key = self.credential_manager.get_api_key("groq")
-        if not api_key: return None
+        if not api_key:
+            return None
         if self._groq_client is None or api_key != self._last_api_key:
             self._groq_client = Groq(api_key=api_key)
             self._last_api_key = api_key
@@ -191,7 +199,14 @@ class TranscriptionService:
             if ui_model == "Select a model...":
                 return "⚠️ Error: No model selected."
 
-            logger.info("Transcription starting | Preset: %s | Model: %s | Lang: %s", ui_preset, ui_model, lang_iso)
+            if ui_preset == "Equation" and not self.credential_manager.get_api_key("groq"):
+                logger.warning("Equation mode requested but no Groq API Key found. Forced fallback to text.")
+                ui_preset = "Voice to text"
+
+            logger.info(
+                "Transcription starting | Preset: %s | Model: %s | Lang: %s",
+                ui_preset, ui_model, lang_iso
+            )
 
             if ui_preset == "Email Draft":
                 prompt = (
@@ -208,7 +223,7 @@ class TranscriptionService:
                 )
             else:
                 prompt = ""
-                
+
             if self.vocabulary_manager:
                 words = self.vocabulary_manager.get_words()
                 if words:
@@ -216,8 +231,9 @@ class TranscriptionService:
                         prompt += " Vocabulary: " + ", ".join(words) + "."
                     else:
                         prompt = ", ".join(words)
-                    
-            if len(prompt) > 500: prompt = prompt[:500]
+
+            if len(prompt) > 500:
+                prompt = prompt[:500]
 
             result = ""
 
@@ -225,12 +241,15 @@ class TranscriptionService:
                 logger.info("Sending audio to LOCAL engine...")
                 if not local_whisper.is_installed(ui_model):
                     return f"⚠️ Error: Model '{ui_model}' is not installed."
-                
-                result = local_whisper.transcribe(filename, language=lang_iso, model_name=ui_model, prompt=prompt)
+
+                result = local_whisper.transcribe(
+                    filename, language=lang_iso, model_name=ui_model, prompt=prompt
+                )
             else:
                 logger.info("Sending audio to CLOUD engine (Groq API)...")
                 client = self._get_groq_client()
-                if not client: return "⚠️ Error: Groq API key missing."
+                if not client:
+                    return "⚠️ Error: Groq API key missing."
 
                 with open(filename, "rb") as file_obj:
                     audio_content = file_obj.read()
@@ -247,7 +266,7 @@ class TranscriptionService:
                     kwargs["prompt"] = prompt
 
                 transcription = client.audio.transcriptions.create(**kwargs)
-                
+
                 valid_text = []
                 segments = None
                 if isinstance(transcription, dict):
@@ -265,18 +284,20 @@ class TranscriptionService:
                             no_speech = getattr(seg, 'no_speech_prob', 0)
                             comp_ratio = getattr(seg, 'compression_ratio', 0)
                             seg_text = getattr(seg, 'text', '')
-                        
-                        if no_speech > 0.6: continue
-                        if comp_ratio > 2.5: continue
+
+                        if no_speech > 0.6:
+                            continue
+                        if comp_ratio > 2.5:
+                            continue
                         if seg_text:
                             valid_text.append(seg_text.strip())
-                        
+
                     result = " ".join(valid_text).strip()
                 elif isinstance(transcription, dict):
                     result = transcription.get("text", "").strip()
                 else:
                     result = getattr(transcription, "text", str(transcription)).strip()
-                    
+
                 word_count = len(re.findall(r'\w+', result))
                 if duration > 4.0 and word_count <= 2:
                     result = ""
@@ -347,7 +368,7 @@ class TranscriptionService:
 
         first_sent = sentences[0]
         first_sent_clean = first_sent.lower().strip('.,;:!?')
-        
+
         has_greeting = False
         words_first = first_sent_clean.split()
         if len(words_first) <= 4:
@@ -357,33 +378,33 @@ class TranscriptionService:
         last_sent = sentences[-1]
         last_sent_clean = last_sent.lower().strip('.,;:!?')
         words_last = last_sent_clean.split()
-        
+
         has_signoff = False
         if len(words_last) <= 5:
             if last_sent.endswith(('.', ',')) or len(words_last) <= 3:
                 has_signoff = True
-        
+
         body_sentences = sentences[:]
         greeting = ""
         signoff = ""
-        
+
         if has_greeting:
             greeting = first_sent
             body_sentences = body_sentences[1:]
-        
+
         if has_signoff and body_sentences:
             signoff = last_sent
             body_sentences = body_sentences[:-1]
-        
+
         greeting = greeting or self._default_greeting(lang_iso)
         signoff = signoff or self._default_signoff(lang_iso)
-        
+
         formatted_body = self._format_body_paragraphs(body_sentences, lang_iso)
-        
+
         parts = [greeting]
         parts.extend(formatted_body)
         parts.append(signoff)
-        
+
         return "\n\n".join(parts)
 
     def _default_greeting(self, lang_iso: str) -> str:
@@ -404,7 +425,7 @@ class TranscriptionService:
             "de": "Mit freundlichen Grüßen,", "it": "Cordiali saluti,", "pt": "Atenciosamente,",
             "nl": "Met vriendelijke groet,", "pl": "Z poważaniem,", "ru": "С уважением,",
             "zh": "此致敬礼，", "ja": "よろしくお願いいたします。", "ko": "감사합니다.",
-            "ar": "مع التحية，", "hi": "धन्यवाद,", "tr": "Saygılarımla,", "sv": "Med vänliga hsningar,",
+            "ar": "مع التحية，", "hi": "धन्यवाद,", "tr": "Saygılarımla,", "sv": "Med vänliga hälsningar,",
             "da": "Med venlig hilsen,", "no": "Med vennlig hilsen,", "fi": "Ystävällisin terveisin,",
             "cs": "S pozdravem,", "hu": "Üdvözlettel,", "el": "Με εκτίμηση,", "he": "בברכה,",
             "th": "ด้วยความเคารพ,", "vi": "Trân trọng,", "id": "Hormat saya,", "ms": "Yang benar,",
@@ -415,10 +436,10 @@ class TranscriptionService:
     def _format_body_paragraphs(self, sentences: list, lang_iso: str) -> list:
         if not sentences:
             return []
-        
+
         paragraphs = []
         current_para = []
-        
+
         transition_patterns = [
             r'^(however|nevertheless|furthermore|moreover|additionally|consequently|therefore|meanwhile|alternatively|specifically|finally|in\s+conclusion|to\s+conclude|on\s+the\s+other\s+hand|firstly|secondly|thirdly)',
             r'^(cependant|néanmoins|par\s+ailleurs|de\s+plus|ensuite|enfin|en\s+conclusion|d\'autre\s+part|toutefois|premièrement|deuxièmement)',
@@ -427,33 +448,33 @@ class TranscriptionService:
             r'^(tuttavia|inoltre|pertanto|in\s+conclusione|d\'alta\s+parte|infine)',
             r'^(no\s+entanto|além\s+disso|portanto|em\s+conclusão|por\s+outro\s+lado|finalmente)',
         ]
-        
-        para_size_target = 2 
-        
+
+        para_size_target = 2
+
         for i, sentence in enumerate(sentences):
             sent_lower = sentence.lower().strip()
             is_transition = any(re.search(pattern, sent_lower) for pattern in transition_patterns)
-            
+
             if (is_transition and current_para) or len(current_para) >= para_size_target:
                 paragraphs.append(" ".join(current_para))
                 current_para = [sentence]
             else:
                 current_para.append(sentence)
-        
+
         if current_para:
             paragraphs.append(" ".join(current_para))
-        
+
         formatted = []
         for p in paragraphs:
             if p:
                 p = p[0].upper() + p[1:] if len(p) > 1 else p.upper()
                 formatted.append(p)
-        
+
         return formatted if formatted else [" ".join(sentences)]
 
 
 class TranscriptionManager:
-    def __init__(self, app_state, audio_manager, sound_manager, stats_manager, 
+    def __init__(self, app_state, audio_manager, sound_manager, stats_manager,
                  history_manager, transcription_service, clipboard_manager, event_bus):
         self.app_state = app_state
         self.audio_manager = audio_manager
@@ -466,21 +487,10 @@ class TranscriptionManager:
         self._previous_active_window = None
         self._is_stopping = False
 
-    def _convert_wav_to_mp3(self, wav_path: str) -> tuple:
-        mp3_path = wav_path.replace(".wav", ".mp3")
-        try:
-            audio = AudioSegment.from_wav(wav_path)
-            audio.export(mp3_path, format="mp3", bitrate="64k", parameters=["-preset", "ultrafast"])
-            os.remove(wav_path)
-            return mp3_path, True
-        except Exception:
-            logger.exception("WAV to MP3 conversion failed")
-            return wav_path, False
-
     def stop_recording_and_transcribe(self) -> None:
-        if getattr(self, "_is_stopping", False) or not self.app_state.audio.is_recording: 
+        if getattr(self, "_is_stopping", False) or not self.app_state.audio.is_recording:
             return
-        
+
         self._is_stopping = True
         tracker = PerfTracker("Transcription Flow")
         tracker.step("Hotkey released")
@@ -490,7 +500,7 @@ class TranscriptionManager:
         try:
             self._previous_active_window = win32gui.GetForegroundWindow()
         except Exception:
-            pass
+            logger.debug("Failed to store foreground window", exc_info=True)
 
         self.event_bus.publish("recording_stopped", None)
 
@@ -498,32 +508,34 @@ class TranscriptionManager:
             self.event_bus.publish("processing_started", None)
             try:
                 time.sleep(0.05)
-                
+
                 self.app_state.audio.is_recording = False
                 self.audio_manager.wait_for_recording()
 
                 wav_file = self.app_state.audio.current_recording_path
-                
+
                 if wav_file and os.path.exists(wav_file):
-                    audio_file_to_send, converted = self._convert_wav_to_mp3(wav_file)
-                    
+                    audio_file_to_send = wav_file
+
                     start_process_time = time.time()
-                    text = self.transcription_service.transcribe(audio_file_to_send, duration=audio_duration)
+                    text = self.transcription_service.transcribe(
+                        audio_file_to_send, duration=audio_duration
+                    )
                     processing_time = time.time() - start_process_time
 
                     if os.path.exists(audio_file_to_send):
                         os.remove(audio_file_to_send)
-                    
+
                     if not (text.startswith("⚠️") or text.startswith("❌")):
                         sys_cfg = self.transcription_service.mode_manager.get_mode("system")
                         ui_model = sys_cfg.get("active_model", "Whisper V3 Turbo")
-                        
+
                         if "Local" in ui_model:
                             used_method = f"local-{ui_model.replace(' ', '-').lower()}"
                         else:
                             active_api_model = GROQ_MODEL_MAPPING.get(ui_model, "whisper-large-v3-turbo")
                             used_method = f"groq-{active_api_model}"
-                                
+
                         self.history_manager.add_entry(
                             text=text,
                             duration_sec=audio_duration,
@@ -534,16 +546,17 @@ class TranscriptionManager:
                         if self.app_state.audio.sound_enabled:
                             self.sound_manager.play("beep_off")
 
-                        time.sleep(0.2) 
+                        time.sleep(0.2)
 
                         if self._previous_active_window:
                             try:
                                 win32gui.SetForegroundWindow(self._previous_active_window)
                                 time.sleep(0.15)
-                            except Exception: pass
+                            except Exception:
+                                logger.debug("Failed to set foreground window", exc_info=True)
 
                         self.clipboard_manager.paste_and_clear(text)
-                
+
             except Exception as e:
                 logger.error(f"FATAL THREAD ERROR: {e}")
             finally:
@@ -552,4 +565,4 @@ class TranscriptionManager:
                 self._is_stopping = False
                 tracker.step("Process finished (cleaned up)")
 
-        threading.Thread(target=_process_transcription, daemon=True).start()
+        global_executor.submit(_process_transcription)

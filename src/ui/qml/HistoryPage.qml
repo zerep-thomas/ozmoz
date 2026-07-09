@@ -76,7 +76,7 @@ Item {
                         if (filterText === "" || fText.toLowerCase().indexOf(filterText) !== -1) {
                             historyModel.append({
                                 "entryId": item.entryId || "",
-                                "dateGroup": item.dateGroup || "Date inconnue",
+                                "dateGroup": item.dateGroup || "Unknown Date",
                                 "fullText": fText,
                                 "shortText": item.shortText || "",
                                 "detailsDate": item.detailsDate || "Unknown",
@@ -86,7 +86,7 @@ Item {
                             })
                         }
                     }
-                } catch(e) { console.log("[ERREUR] Impossible de parser l'historique:", e) }
+                } catch(e) { console.log("[ERROR] Failed to parse history:", e) }
             }
 
             section.property: "dateGroup"

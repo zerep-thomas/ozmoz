@@ -1,17 +1,21 @@
 import numpy as np
 import json
-import threading
 from PySide6.QtCore import QObject, Signal, Property, Slot, QUrl
 from PySide6.QtGui import QGuiApplication, QDesktopServices
 from datetime import datetime, timedelta
+import logging
 
 from src.audio.local_audio import local_whisper
+from src.core.system import global_executor
+
+logger = logging.getLogger(__name__)
+
 
 class UIBridge(QObject):
     activeChanged = Signal(bool)
     levelsChanged = Signal(list)
     showSettingsWindow = Signal()
-    
+
     statsChanged = Signal()
     changelogChanged = Signal()
     shortcutsChanged = Signal()
@@ -22,17 +26,17 @@ class UIBridge(QObject):
     updateStatusChanged = Signal(str, str)
     modeChanged = Signal()
     credentialsChanged = Signal()
-    
+
     downloadLocalModelStatusChanged = Signal(str)
     downloadProgressChanged = Signal(float)
-    
+
     visualizerErrorChanged = Signal(str)
     navigateToConfig = Signal()
     navigateToDefaultMode = Signal()
 
     showDownloadModalRequested = Signal(str)
     showUpdateModalRequested = Signal(str, str)
-    
+
     processingChanged = Signal(bool)
 
     def __init__(self, app_state, event_bus, cred_manager,
@@ -49,7 +53,7 @@ class UIBridge(QObject):
         self.settings_manager = settings_manager
         self.update_manager = update_manager
         self.mode_manager = mode_manager
-        
+
         self._active = False
         self._processing = False
         self.NUM_BARS = 9
@@ -70,13 +74,13 @@ class UIBridge(QObject):
         event_bus.subscribe("history_updated", self.on_history_updated)
         event_bus.subscribe("vocabulary_updated", self.on_vocabulary_updated)
         event_bus.subscribe("visualizer_error", self.on_visualizer_error)
-        
+
         event_bus.subscribe("settings_updated", lambda d: self.settingsChanged.emit())
         event_bus.subscribe("mode_updated", lambda d: self.modeChanged.emit())
-        
+
         event_bus.subscribe("processing_started", self.on_processing_started)
         event_bus.subscribe("processing_finished", self.on_processing_finished)
-        
+
         event_bus.subscribe("update_check_started", lambda d: self.updateStatusChanged.emit("checking", "Checking..."))
         event_bus.subscribe("update_available", self.on_update_available)
         event_bus.subscribe("update_not_available", lambda d: self.updateStatusChanged.emit("up_to_date", "You are up to date"))
@@ -91,7 +95,7 @@ class UIBridge(QObject):
         self.processingChanged.emit(self._processing)
 
     @Property(bool, notify=processingChanged)
-    def processing(self): 
+    def processing(self):
         return self._processing
 
     @Slot(str)
@@ -106,19 +110,19 @@ class UIBridge(QObject):
     def downloadLocalModel(self, model_name):
         self.downloadLocalModelStatusChanged.emit("downloading")
         self.downloadProgressChanged.emit(0.0)
-        
+
         def _progress_cb(percentage):
             self.downloadProgressChanged.emit(percentage)
-            
+
         def _worker():
             success = local_whisper.download(model_name, progress_callback=_progress_cb)
             if success:
                 self.downloadLocalModelStatusChanged.emit("done")
-                self.modeChanged.emit() 
+                self.modeChanged.emit()
             else:
                 self.downloadLocalModelStatusChanged.emit("error")
-                
-        threading.Thread(target=_worker, daemon=True).start()
+
+        global_executor.submit(_worker)
 
     @Property(str, notify=modeChanged)
     def installedLocalModelsJson(self):
@@ -132,7 +136,7 @@ class UIBridge(QObject):
     def deleteLocalModel(self, model_name):
         success = local_whisper.delete_model(model_name)
         if success:
-            self.modeChanged.emit() 
+            self.modeChanged.emit()
         return success
 
     @Property(str, notify=modeChanged)
@@ -141,7 +145,8 @@ class UIBridge(QObject):
 
     @Slot(str)
     def setDefaultModePreset(self, val):
-        if self.mode_manager: self.mode_manager.update_mode("default", "preset", val)
+        if self.mode_manager:
+            self.mode_manager.update_mode("default", "preset", val)
 
     @Property(str, notify=modeChanged)
     def defaultModeLanguage(self):
@@ -149,7 +154,8 @@ class UIBridge(QObject):
 
     @Slot(str)
     def setDefaultModeLanguage(self, val):
-        if self.mode_manager: self.mode_manager.update_mode("default", "language", val)
+        if self.mode_manager:
+            self.mode_manager.update_mode("default", "language", val)
 
     @Property(str, notify=modeChanged)
     def defaultModeVoiceModel(self):
@@ -157,7 +163,8 @@ class UIBridge(QObject):
 
     @Slot(str)
     def setDefaultModeVoiceModel(self, val):
-        if self.mode_manager: self.mode_manager.update_mode("default", "voice_model", val)
+        if self.mode_manager:
+            self.mode_manager.update_mode("default", "voice_model", val)
 
     @Slot(str, str, str)
     def applyActiveModeSettings(self, preset, language, voice_model):
@@ -173,7 +180,8 @@ class UIBridge(QObject):
 
     @Property(str, notify=modeChanged)
     def customModesJson(self):
-        if not self.mode_manager: return "[]"
+        if not self.mode_manager:
+            return "[]"
         modes = self.mode_manager.get_custom_modes()
         mode_list = []
         for mode_id, data in modes.items():
@@ -200,18 +208,23 @@ class UIBridge(QObject):
     def removeCustomMode(self, mode_id):
         if self.mode_manager:
             self.mode_manager.delete_mode(mode_id)
-            
+
     @Property(str, notify=modeChanged)
     def activeModeId(self):
-        if not self.mode_manager: return "default"
+        if not self.mode_manager:
+            return "default"
         return self.mode_manager.get_mode("system").get("current_active", "default")
-        
+
     @Slot(str)
     def setActiveModeId(self, mode_id):
         if self.mode_manager:
             self.mode_manager.update_mode("system", "current_active", mode_id)
             m = self.mode_manager.get_mode(mode_id)
-            self.applyActiveModeSettings(m.get("preset", "Voice to text"), m.get("language", "English"), m.get("voice_model", "Whisper V3 Turbo"))
+            self.applyActiveModeSettings(
+                m.get("preset", "Voice to text"),
+                m.get("language", "English"),
+                m.get("voice_model", "Whisper V3 Turbo")
+            )
 
     @Property(bool, notify=settingsChanged)
     def playSounds(self):
@@ -235,7 +248,7 @@ class UIBridge(QObject):
     def checkUpdatesNow(self):
         if self.update_manager:
             self.update_manager.check_for_updates()
-            
+
     @Slot()
     def openUpdateUrl(self):
         if self.update_manager and self.update_manager.release_url:
@@ -248,11 +261,13 @@ class UIBridge(QObject):
 
     @Slot(str)
     def addVocabularyWord(self, word):
-        if self.vocab_manager: self.vocab_manager.add_word(word)
+        if self.vocab_manager:
+            self.vocab_manager.add_word(word)
 
     @Slot(int)
     def removeVocabularyWord(self, index):
-        if self.vocab_manager: self.vocab_manager.remove_word(index)
+        if self.vocab_manager:
+            self.vocab_manager.remove_word(index)
 
     def on_vocabulary_updated(self, data):
         self.vocabularyChanged.emit()
@@ -281,9 +296,12 @@ class UIBridge(QObject):
             try:
                 dt_obj = datetime.fromisoformat(ts_str)
                 dt_date = dt_obj.date()
-                if dt_date == today: date_group = "Today"
-                elif dt_date == yesterday: date_group = "Yesterday"
-                else: date_group = f"{dt_obj.day} {months_en[dt_obj.month]} {dt_obj.year}"
+                if dt_date == today:
+                    date_group = "Today"
+                elif dt_date == yesterday:
+                    date_group = "Yesterday"
+                else:
+                    date_group = f"{dt_obj.day} {months_en[dt_obj.month]} {dt_obj.year}"
                 details_date = f"{dt_obj.day} {months_en[dt_obj.month]} {dt_obj.year} at {dt_obj.strftime('%H:%M')}"
             except Exception:
                 date_group = "Unknown Date"
@@ -312,11 +330,13 @@ class UIBridge(QObject):
         self.refresh_home_data()
 
     @Property(str, notify=historyChanged)
-    def historyListJson(self): return json.dumps(self._history_list)
+    def historyListJson(self):
+        return json.dumps(self._history_list)
 
     @Slot(str)
     def deleteHistoryEntry(self, entry_id):
-        if self.hist_manager: self.hist_manager.delete_entry(entry_id)
+        if self.hist_manager:
+            self.hist_manager.delete_entry(entry_id)
 
     @Slot()
     def clearAllHistory(self):
@@ -327,23 +347,27 @@ class UIBridge(QObject):
                     self.hist_manager.event_bus.publish("history_updated", None)
                 self.refresh_home_data()
             except Exception as e:
-                print(f"Error clearing history: {e}")
+                logger.error(f"Error clearing history: {e}")
 
     @Slot(str)
     def copyToClipboard(self, text):
         QGuiApplication.clipboard().setText(text)
 
     @Property(str, notify=statsChanged)
-    def statAvgSpeed(self): return self._stats["avgSpeed"]
+    def statAvgSpeed(self):
+        return self._stats["avgSpeed"]
 
     @Property(str, notify=statsChanged)
-    def statWordsThisWeek(self): return self._stats["wordsThisWeek"]
+    def statWordsThisWeek(self):
+        return self._stats["wordsThisWeek"]
 
     @Property(str, notify=statsChanged)
-    def statTimeSaved(self): return self._stats["timeSaved"]
+    def statTimeSaved(self):
+        return self._stats["timeSaved"]
 
     @Property(list, notify=changelogChanged)
-    def changelogList(self): return self._changelog
+    def changelogList(self):
+        return self._changelog
 
     @Property(str, notify=shortcutsChanged)
     def recordShortcut1(self):
@@ -358,15 +382,17 @@ class UIBridge(QObject):
         return parts[1] if len(parts) > 1 else ""
 
     @Property(str, notify=credentialsChanged)
-    def groqKey(self): return self.cred_manager.get_api_key("groq") or ""
+    def groqKey(self):
+        return self.cred_manager.get_api_key("groq") or ""
 
     @Property(bool, notify=credentialsChanged)
-    def hasGroqKeyProp(self): return bool(self.cred_manager.get_api_key("groq"))
+    def hasGroqKeyProp(self):
+        return bool(self.cred_manager.get_api_key("groq"))
 
     @Slot(str)
-    def saveGroqKey(self, key): 
+    def saveGroqKey(self, key):
         self.cred_manager.save_api_key("groq", key)
-        
+
         if self.mode_manager:
             if key and key.strip():
                 current_model = self.mode_manager.get_mode("default").get("voice_model", "Select a model...")
@@ -374,23 +400,24 @@ class UIBridge(QObject):
                     self.mode_manager.update_mode("default", "voice_model", "Whisper V3 Turbo")
             else:
                 self.mode_manager.update_mode("default", "voice_model", "Select a model...")
-                
+
                 sys_cfg = self.mode_manager.get_mode("system")
                 active_model = sys_cfg.get("active_model", "Select a model...")
                 if active_model in ["Whisper V3", "Whisper V3 Turbo"]:
                     self.mode_manager.update_mode("system", "active_model", "Select a model...")
-        
+
         self.credentialsChanged.emit()
         self.modeChanged.emit()
-        
+
     def on_update_available(self, data):
         self.updateStatusChanged.emit("available", f"Version {data['version']} available!")
         self.showSettingsWindow.emit()
         self.showUpdateModalRequested.emit(data['version'], data['url'])
 
     @Slot()
-    def openSettings(self): self.showSettingsWindow.emit()
-    
+    def openSettings(self):
+        self.showSettingsWindow.emit()
+
     @Slot()
     def requestNavigateToConfig(self):
         self.navigateToConfig.emit()
@@ -412,7 +439,14 @@ class UIBridge(QObject):
         self.levelsChanged.emit(self._levels)
 
     def on_audio_frame(self, audio_data: bytes):
-        if not self._active: return
+        try:
+            self._process_audio_frame(audio_data)
+        except Exception:
+            logger.exception("on_audio_frame failed unexpectedly")
+
+    def _process_audio_frame(self, audio_data: bytes):
+        if not self._active:
+            return
         data = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32)
         rms = float(np.sqrt(np.mean(data ** 2)))
 
@@ -436,16 +470,16 @@ class UIBridge(QObject):
             log_edges[0] = 0
             log_edges[-1] = band_count
             for i in range(1, len(log_edges)):
-                if log_edges[i] <= log_edges[i-1]:
-                    log_edges[i] = log_edges[i-1] + 1
+                if log_edges[i] <= log_edges[i - 1]:
+                    log_edges[i] = log_edges[i - 1] + 1
         else:
             log_edges = np.linspace(0, 0, self.NUM_BARS + 1).astype(int)
 
         levels_freq = []
         for i in range(self.NUM_BARS):
-            band = speech[log_edges[i]:log_edges[i+1]]
+            band = speech[log_edges[i]:log_edges[i + 1]]
             raw_val = float(np.sum(band)) if len(band) else 0.0
-            compressed = raw_val ** 0.5 
+            compressed = raw_val ** 0.5
             levels_freq.append(compressed)
 
         peak_freq = max(levels_freq) if max(levels_freq) > 0 else 1e-6
@@ -469,12 +503,14 @@ class UIBridge(QObject):
             0.75 * n + 0.25 * s if n > s else 0.20 * n + 0.80 * s
             for n, s in zip(final_levels, self._smooth)
         ]
-        
+
         self._levels = [min(26.0, max(2.0, float(s * 26))) for s in self._smooth]
         self.levelsChanged.emit(self._levels)
 
     @Property(bool, notify=activeChanged)
-    def active(self): return self._active
+    def active(self):
+        return self._active
 
     @Property(list, notify=levelsChanged)
-    def levels(self): return self._levels
+    def levels(self):
+        return self._levels

@@ -5,8 +5,13 @@
         "description": "Thank you for downloading Ozmoz, I hope you enjoy it!"
     },
     {
+        "date": "July 9",
+        "title": "Performance & Stability (v1.0.2)",
+        "description": "This release brings performance gains: FFmpeg has been removed to shave over 100MB off the app size, and MP3 conversion is bypassed to decrease latency. We also solved visualizer disappearances and added instant clipboard pasting."
+    },
+    {
         "date": "June 29",
-        "title": "New mode for v1.0.1 !",
+        "title": "New mode ! (v1.0.1)",
         "description": "Now you can turn your voice into LaTeX equations with the new Equation mode. This mode is only available when using a Groq API key because it requires cloud-based LLMs. By default, it uses the cheapest and fastest model currently available on the Groq Cloud."
     },
     {
