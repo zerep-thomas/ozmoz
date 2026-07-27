@@ -4,7 +4,7 @@
 
 Ozmoz is a Windows application that allows you to transcribe speech to text ultra-fast, either in the cloud (with Groq) or locally, whether you have a powerful computer or not. You just need to hold down `Ctrl + Space` and your words will appear in any text field.
 
-https://github.com/user-attachments/assets/64550abe-ce16-49b2-9940-ee7ca6c1ba25
+https://github.com/user-attachments/assets/c4ed4481-9fa8-4133-b949-b5b5408b4e3a
 
 ## Why Ozmoz?
 
