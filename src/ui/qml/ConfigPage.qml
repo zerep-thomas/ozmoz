@@ -92,7 +92,7 @@ Item {
         property alias control: controlSlot.sourceComponent
         property bool showSeparator: true
 
-        height: 48
+        height: 42
         Layout.fillWidth: true
 
         RowLayout {
@@ -145,116 +145,20 @@ Item {
 
             Item {
                 width: parent.width
-                implicitHeight: mainColumn.implicitHeight + 40
+                implicitHeight: mainColumn.implicitHeight + 30
 
                 ColumnLayout {
                     id: mainColumn
                     width: Math.min(560, parent.width - 60)
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
-                    anchors.topMargin: 20
-                    spacing: 24
+                    anchors.topMargin: 16
+                    spacing: 12
 
-                    // SECTION: API KEYS
+                    // SECTION 1: SOUND
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 10
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            Text { text: "API Keys"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
-                            InfoIcon { tip: "Required for Cloud models (like Whisper V3 Turbo). Your key is encrypted securely with Windows and never stored in plain text." }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            color: "#55585a"
-                            radius: 12
-                            border.color: "#66696a"
-                            border.width: 1
-                            implicitHeight: apiColumn.implicitHeight + 2
-
-                            ColumnLayout {
-                                id: apiColumn
-                                anchors.fill: parent
-                                anchors.margins: 1
-                                spacing: 0
-
-                                SettingRow {
-                                    text: "Groq API Key"
-                                    showSeparator: false
-                                    control: Rectangle {
-                                        width: 350 
-                                        height: 32
-                                        radius: 8
-                                        color: "#3e4243"
-                                        border.color: groqKeyInput.activeFocus ? "#5a9ef8" : "#6e7273"
-                                        border.width: 1
-
-                                        property bool isSaved: true
-
-                                        TextInput {
-                                            id: groqKeyInput
-                                            anchors.left: parent.left
-                                            anchors.right: innerSaveBtn.left
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            anchors.margins: 10
-                                            color: "white"
-                                            font.pixelSize: 13
-                                            echoMode: TextInput.Password
-                                            verticalAlignment: TextInput.AlignVCenter
-                                            selectionColor: "#4a90d9"
-                                            text: uiBridge.groqKey
-                                            clip: true
-                                            onTextEdited: parent.isSaved = false
-                                        }
-
-                                        Rectangle {
-                                            id: innerSaveBtn
-                                            width: 24
-                                            height: 24
-                                            radius: 6
-                                            anchors.right: parent.right
-                                            anchors.rightMargin: 4
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            color: innerSaveBtnArea.containsMouse ? "#2c5fc4" : "#2452a3"
-                                            
-                                            opacity: !parent.isSaved ? 1.0 : 0.0
-                                            visible: opacity > 0.0
-                                            Behavior on opacity { NumberAnimation { duration: 250 } }
-
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: "+"
-                                                color: "white"
-                                                font.pixelSize: 16
-                                                font.bold: true
-                                                anchors.verticalCenterOffset: -2
-                                            }
-
-                                            MouseArea {
-                                                id: innerSaveBtnArea
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    uiBridge.saveGroqKey(groqKeyInput.text)
-                                                    innerSaveBtn.parent.isSaved = true
-                                                    groqKeyInput.focus = false
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // SECTION: SOUND
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
+                        spacing: 6
 
                         Text { text: "Sound"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
 
@@ -284,131 +188,10 @@ Item {
                         }
                     }
 
-                    // SECTION: UPDATES
+                    // SECTION 2: LOCAL MODELS
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 10
-
-                        Text { text: "Updates"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            color: "#55585a"
-                            radius: 12
-                            border.color: "#66696a"
-                            border.width: 1
-                            implicitHeight: updatesColumn.implicitHeight + 2
-
-                            ColumnLayout {
-                                id: updatesColumn
-                                anchors.fill: parent
-                                anchors.margins: 1
-                                spacing: 0
-
-                                SettingRow {
-                                    text: "Check for updates"
-                                    showSeparator: true
-                                    control: Rectangle {
-                                        height: 28
-                                        implicitWidth: updateText.implicitWidth + 20
-                                        radius: 6
-                                        color: updateArea.containsMouse ? "#6a6e70" : "#64686a"
-                                        border.color: "#7e8385"
-                                        border.width: 1
-                                        Behavior on color { ColorAnimation { duration: 120 } }
-
-                                        Text {
-                                            id: updateText
-                                            anchors.centerIn: parent
-                                            text: configRoot.updateMessage || ""
-                                            color: configRoot.updateStatus === "available" ? "#b0b0b0" : "white"
-                                            font.pixelSize: 12
-                                            font.underline: configRoot.updateStatus === "available"
-                                        }
-
-                                        MouseArea {
-                                            id: updateArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                if (configRoot.updateStatus === "available") uiBridge.openUpdateUrl()
-                                                else if (configRoot.updateStatus !== "checking") uiBridge.checkUpdatesNow()
-                                            }
-                                        }
-                                    }
-                                }
-
-                                SettingRow {
-                                    text: "Automatically check for updates"
-                                    showSeparator: false
-                                    control: ToggleSwitch {
-                                        checked: uiBridge.autoCheckUpdates
-                                        onToggled: function(checked) { uiBridge.setAutoCheckUpdates(checked) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // SECTION: HISTORY
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
-
-                        Text { text: "History"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            color: "#55585a"
-                            radius: 12
-                            border.color: "#66696a"
-                            border.width: 1
-                            implicitHeight: historyColumn.implicitHeight + 2
-
-                            ColumnLayout {
-                                id: historyColumn
-                                anchors.fill: parent
-                                anchors.margins: 1
-                                spacing: 0
-
-                                SettingRow {
-                                    text: "Clear all history"
-                                    showSeparator: false
-                                    control: Rectangle {
-                                        height: 28
-                                        implicitWidth: clearBtnText.implicitWidth + 20
-                                        radius: 6
-                                        color: clearArea.containsMouse ? "#6a6e70" : "#64686a"
-                                        border.color: "#7e8385"
-                                        border.width: 1
-                                        Behavior on color { ColorAnimation { duration: 120 } }
-
-                                        Text {
-                                            id: clearBtnText
-                                            anchors.centerIn: parent
-                                            text: "Clear" 
-                                            color: "white"
-                                            font.pixelSize: 12
-                                        }
-
-                                        MouseArea {
-                                            id: clearArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: configRoot.showClearHistoryModal = true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // SECTION : Local models 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
+                        spacing: 6
 
                         Text { text: "Local Models"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
 
@@ -428,7 +211,7 @@ Item {
 
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    height: 48
+                                    height: 42
                                     color: "transparent"
                                     
                                     RowLayout {
@@ -558,6 +341,223 @@ Item {
                         }
                     }
 
+                    // SECTION 3: API KEYS
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Text { text: "API Keys"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
+                            InfoIcon { tip: "Required for Cloud models (like Whisper V3 Turbo). Your key is encrypted securely with Windows and never stored in plain text." }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            color: "#55585a"
+                            radius: 12
+                            border.color: "#66696a"
+                            border.width: 1
+                            implicitHeight: apiColumn.implicitHeight + 2
+
+                            ColumnLayout {
+                                id: apiColumn
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                spacing: 0
+
+                                SettingRow {
+                                    text: "Groq API Key"
+                                    showSeparator: false
+                                    control: Rectangle {
+                                        width: 320 
+                                        height: 30
+                                        radius: 8
+                                        color: "#3e4243"
+                                        border.color: groqKeyInput.activeFocus ? "#5a9ef8" : "#6e7273"
+                                        border.width: 1
+
+                                        property bool isSaved: true
+
+                                        TextInput {
+                                            id: groqKeyInput
+                                            anchors.left: parent.left
+                                            anchors.right: innerSaveBtn.left
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            anchors.margins: 8
+                                            color: "white"
+                                            font.pixelSize: 13
+                                            echoMode: TextInput.Password
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            selectionColor: "#4a90d9"
+                                            text: uiBridge.groqKey
+                                            clip: true
+                                            onTextEdited: parent.isSaved = false
+                                        }
+
+                                        Rectangle {
+                                            id: innerSaveBtn
+                                            width: 22
+                                            height: 22
+                                            radius: 6
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: 4
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            color: innerSaveBtnArea.containsMouse ? "#2c5fc4" : "#2452a3"
+                                            
+                                            opacity: !parent.isSaved ? 1.0 : 0.0
+                                            visible: opacity > 0.0
+                                            Behavior on opacity { NumberAnimation { duration: 250 } }
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "+"
+                                                color: "white"
+                                                font.pixelSize: 16
+                                                font.bold: true
+                                                anchors.verticalCenterOffset: -2
+                                            }
+
+                                            MouseArea {
+                                                id: innerSaveBtnArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    uiBridge.saveGroqKey(groqKeyInput.text)
+                                                    innerSaveBtn.parent.isSaved = true
+                                                    groqKeyInput.focus = false
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // SECTION 4: UPDATES
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Text { text: "Updates"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            color: "#55585a"
+                            radius: 12
+                            border.color: "#66696a"
+                            border.width: 1
+                            implicitHeight: updatesColumn.implicitHeight + 2
+
+                            ColumnLayout {
+                                id: updatesColumn
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                spacing: 0
+
+                                SettingRow {
+                                    text: "Check for updates"
+                                    showSeparator: true
+                                    control: Rectangle {
+                                        height: 28
+                                        implicitWidth: updateText.implicitWidth + 20
+                                        radius: 6
+                                        color: updateArea.containsMouse ? "#6a6e70" : "#64686a"
+                                        border.color: "#7e8385"
+                                        border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 120 } }
+
+                                        Text {
+                                            id: updateText
+                                            anchors.centerIn: parent
+                                            text: configRoot.updateMessage || ""
+                                            color: configRoot.updateStatus === "available" ? "#b0b0b0" : "white"
+                                            font.pixelSize: 12
+                                            font.underline: configRoot.updateStatus === "available"
+                                        }
+
+                                        MouseArea {
+                                            id: updateArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (configRoot.updateStatus === "available") uiBridge.openUpdateUrl()
+                                                else if (configRoot.updateStatus !== "checking") uiBridge.checkUpdatesNow()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                SettingRow {
+                                    text: "Automatically check for updates"
+                                    showSeparator: false
+                                    control: ToggleSwitch {
+                                        checked: uiBridge.autoCheckUpdates
+                                        onToggled: function(checked) { uiBridge.setAutoCheckUpdates(checked) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // SECTION 5: HISTORY
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Text { text: "History"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            color: "#55585a"
+                            radius: 12
+                            border.color: "#66696a"
+                            border.width: 1
+                            implicitHeight: historyColumn.implicitHeight + 2
+
+                            ColumnLayout {
+                                id: historyColumn
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                spacing: 0
+
+                                SettingRow {
+                                    text: "Clear all history"
+                                    showSeparator: false
+                                    control: Rectangle {
+                                        height: 28
+                                        implicitWidth: clearBtnText.implicitWidth + 20
+                                        radius: 6
+                                        color: clearArea.containsMouse ? "#6a6e70" : "#64686a"
+                                        border.color: "#7e8385"
+                                        border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 120 } }
+
+                                        Text {
+                                            id: clearBtnText
+                                            anchors.centerIn: parent
+                                            text: "Clear" 
+                                            color: "white"
+                                            font.pixelSize: 12
+                                        }
+
+                                        MouseArea {
+                                            id: clearArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: configRoot.showClearHistoryModal = true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     Item { height: 10; Layout.fillWidth: true }
                 }
             }
@@ -588,7 +588,7 @@ Item {
         }
     }
 
-// ─── MODAL CONFIRMATION CLEAR HISTORY ───
+    // ─── MODAL CONFIRMATION CLEAR HISTORY ───
     Item {
         id: clearModalOverlay
         anchors.fill: parent

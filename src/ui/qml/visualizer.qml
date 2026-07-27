@@ -156,7 +156,7 @@ Window {
                 text: pill.errorText
                 color: "white"
                 font.pixelSize: 13
-                font.bold: true
+                font.weight: Font.DemiBold
                 opacity: pill.isError ? 1.0 : 0.0
                 Behavior on opacity { NumberAnimation { duration: 200 } }
             }
