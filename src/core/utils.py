@@ -87,10 +87,10 @@ class SoundManager:
     _instance = None
     _lock = threading.Lock()
     _initialized = False
-    beep_on_path = None
-    beep_off_path = None
+    beep_on_bytes: bytes | None = None
+    beep_off_bytes: bytes | None = None
     settings_manager = None
-
+ 
     def __new__(cls, settings_manager=None):
         if cls._instance is None:
             with cls._lock:
@@ -98,10 +98,10 @@ class SoundManager:
                     cls._instance = super().__new__(cls)
                     if settings_manager:
                         cls.settings_manager = settings_manager
-
+ 
                     global_executor.submit(cls._instance._initialize)
         return cls._instance
-
+ 
     def _initialize(self):
         if SoundManager._initialized:
             return
@@ -111,53 +111,48 @@ class SoundManager:
             try:
                 on_path = PathManager.get_resource_path(BEEP_ON_FILENAME)
                 off_path = PathManager.get_resource_path(BEEP_OFF_FILENAME)
-
-                temp_dir = tempfile.gettempdir()
-                out_on_path = os.path.join(temp_dir, "ozmoz_beep_on.wav")
-                out_off_path = os.path.join(temp_dir, "ozmoz_beep_off.wav")
-
-                SoundManager.beep_on_path = on_path
-                SoundManager.beep_off_path = off_path
-
+ 
                 if os.path.exists(on_path):
                     try:
                         audio_on = AudioSegment.from_wav(on_path) - 10.0
-                        audio_on.export(out_on_path, format="wav")
-                        if os.path.exists(out_on_path):
-                            SoundManager.beep_on_path = out_on_path
+                        buf = io.BytesIO()
+                        audio_on.export(buf, format="wav")
+                        SoundManager.beep_on_bytes = buf.getvalue()
                     except Exception as e:
-                        logger.error(f"Failed to lower volume for beep_on: {e}")
-
+                        logger.error(f"Failed to prepare beep_on: {e}")
+ 
                 if os.path.exists(off_path):
                     try:
                         audio_off = AudioSegment.from_wav(off_path) - 10.0
-                        audio_off.export(out_off_path, format="wav")
-                        if os.path.exists(out_off_path):
-                            SoundManager.beep_off_path = out_off_path
+                        buf = io.BytesIO()
+                        audio_off.export(buf, format="wav")
+                        SoundManager.beep_off_bytes = buf.getvalue()
                     except Exception as e:
-                        logger.error(f"Failed to lower volume for beep_off: {e}")
-
+                        logger.error(f"Failed to prepare beep_off: {e}")
+ 
                 SoundManager._initialized = True
             except Exception:
                 logger.exception("Failed to initialize sound manager")
-
+ 
     def play(self, sound_name: str) -> None:
         if SoundManager.settings_manager and not SoundManager.settings_manager.get("play_sounds"):
             return
         if not SoundManager._initialized:
             self._initialize()
-
-        sound_path = SoundManager.beep_on_path if sound_name == "beep_on" else SoundManager.beep_off_path
-        if not sound_path or not os.path.exists(sound_path):
+ 
+        sound_bytes = SoundManager.beep_on_bytes if sound_name == "beep_on" else SoundManager.beep_off_bytes
+        if not sound_bytes:
             return
+ 
+        def _blocking_play():
+            try:
+                winsound.PlaySound(sound_bytes, winsound.SND_MEMORY | winsound.SND_NODEFAULT)
+            except Exception:
+                logger.exception("Failed to play sound")
+ 
+        threading.Thread(target=_blocking_play, daemon=True, name=f"SoundPlay-{sound_name}").start()
 
-        try:
-            winsound.PlaySound(
-                sound_path,
-                winsound.SND_FILENAME | winsound.SND_NODEFAULT | winsound.SND_ASYNC
-            )
-        except Exception:
-            logger.exception("Failed to play sound")
+
 
 
 class ClipboardManager:

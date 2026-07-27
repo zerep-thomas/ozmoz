@@ -54,36 +54,63 @@ class AudioManager:
         self.mode_manager = mode_manager
         self.credential_manager = credential_manager
         self._pyaudio_instance = None
-        self._audio_stream = None
+        self._audio_stream = None  
         self._recording_thread = None
-
+ 
     def initialize(self) -> bool:
-        if self._pyaudio_instance:
+        if self._pyaudio_instance and self._audio_stream:
             return True
         try:
             with SuppressStderr():
                 self._pyaudio_instance = pyaudio.PyAudio()
             self.app_state.audio.pyaudio_instance = self._pyaudio_instance
+ 
+            if not self._open_stream():
+                return False
             return True
         except Exception:
             logger.exception("Failed to initialize PyAudio")
             return False
-
+ 
+    def _open_stream(self) -> bool:
+        try:
+            self._audio_stream = self._pyaudio_instance.open(
+                format=AppConfig.AUDIO_FORMAT,
+                channels=AppConfig.AUDIO_CHANNELS,
+                rate=AppConfig.AUDIO_RATE,
+                input=True,
+                frames_per_buffer=AppConfig.AUDIO_CHUNK,
+                start=False, 
+            )
+            return True
+        except Exception:
+            logger.exception("Failed to open audio stream")
+            return False
+ 
     def terminate(self) -> None:
         self.wait_for_recording()
         if self._audio_stream:
-            self._audio_stream.stop_stream()
-            self._audio_stream.close()
+            try:
+                if self._audio_stream.is_active():
+                    self._audio_stream.stop_stream()
+                self._audio_stream.close()
+            except Exception:
+                pass
             self._audio_stream = None
         if self._pyaudio_instance:
             self._pyaudio_instance.terminate()
             self._pyaudio_instance = None
-
+ 
     def start_recording(self) -> None:
+        _t0 = time.perf_counter()
+        def _mark(label):
+            logger.warning("PERF start_recording | %s | +%.1fms", label, (time.perf_counter() - _t0) * 1000)
+
+        _mark("entered")
+
         if self.mode_manager and self.credential_manager:
             sys_cfg = self.mode_manager.get_mode("system")
             ui_model = sys_cfg.get("active_model", "Whisper V3 Turbo")
-
             if ui_model == "Select a model...":
                 self.event_bus.publish("visualizer_error", "Choose a model")
                 return
@@ -95,61 +122,63 @@ class AudioManager:
                 if not self.credential_manager.get_api_key("groq"):
                     self.event_bus.publish("visualizer_error", "Choose a model")
                     return
+        _mark("model checks done")
 
-        if not self.app_state.audio.pyaudio_instance:
+        if not self._pyaudio_instance or not self._audio_stream:
             if not self.initialize():
                 return
+        _mark("pyaudio/stream ready")
 
         try:
-            pre_stream = self._pyaudio_instance.open(
-                format=AppConfig.AUDIO_FORMAT,
-                channels=AppConfig.AUDIO_CHANNELS,
-                rate=AppConfig.AUDIO_RATE,
-                input=True,
-                frames_per_buffer=AppConfig.AUDIO_CHUNK,
-            )
-            self._audio_stream = pre_stream
+            if not self._audio_stream.is_active():
+                self._audio_stream.start_stream()
         except Exception:
-            logger.exception("Failed to pre-open audio stream")
-            return
+            logger.exception("Failed to start audio stream — reopening from scratch")
+            if not self._open_stream():
+                return
+            self._audio_stream.start_stream()
+        _mark("stream started")
 
         if self.app_state.audio.sound_enabled:
             self.sound_manager.play("beep_on")
+        _mark("beep triggered")
 
         self.event_bus.publish("recording_started", None)
-
+        _mark("event published")
+ 
         self.app_state.is_busy = True
         self.app_state.audio.is_recording = True
         self.app_state.audio.recording_start_time = time.time()
-
+ 
         temp_dir = Path(tempfile.gettempdir()).resolve()
         temp_path = temp_dir / f"ozmoz_rec_{uuid.uuid4().hex}.wav"
         self.app_state.audio.current_recording_path = str(temp_path)
-
+ 
         self._recording_thread = threading.Thread(
             target=self._record_audio_worker, args=(str(temp_path),), daemon=True
         )
         self._recording_thread.start()
-
+ 
+ 
     def _record_audio_worker(self, filename: str) -> None:
         frames = []
+        stream = self._audio_stream
         try:
-            stream = self._audio_stream
             while self.app_state.audio.is_recording:
                 data = stream.read(AppConfig.AUDIO_CHUNK, exception_on_overflow=False)
                 frames.append(data)
-
                 self.event_bus.publish("audio_frame", data, threaded=False)
         except Exception:
             logger.exception("Audio recording failed unexpectedly")
         finally:
-            if self._audio_stream:
-                self._audio_stream.stop_stream()
-                self._audio_stream.close()
-                self._audio_stream = None
+            try:
+                if stream.is_active():
+                    stream.stop_stream() 
+            except Exception:
+                pass
             if frames:
                 self._write_wav_file(filename, frames)
-
+ 
     def _write_wav_file(self, filename: str, frames: list) -> None:
         try:
             with wave.open(filename, "wb") as wave_file:
@@ -159,7 +188,7 @@ class AudioManager:
                 wave_file.writeframes(b"".join(frames))
         except Exception:
             logger.exception(f"Failed to write audio to {filename}")
-
+ 
     def wait_for_recording(self, timeout: float = 5.0) -> None:
         if self._recording_thread and self._recording_thread.is_alive():
             self._recording_thread.join(timeout=timeout)
