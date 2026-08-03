@@ -22,7 +22,7 @@ DOWNLOAD_CHUNK_SIZE = 16384
 DOWNLOAD_TIMEOUT_SECONDS = 30
 
 CPU_INFERENCE_THREADS = max(1, min(4, (os.cpu_count() or 4) - 1))
-VAD_MIN_SILENCE_MS = 300
+VAD_MIN_SILENCE_MS = 1500
 ALLOWED_DOWNLOAD_DOMAIN = "huggingface.co"
 
 logger = logging.getLogger(__name__)

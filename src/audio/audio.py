@@ -251,15 +251,42 @@ class TranscriptionService:
                     "Example: integral from zero to infinity of x squared dx equals pi."
                 )
             else:
-                prompt = ""
+                prompts_by_lang = {
+                    "fr": "Bonjour, voici une transcription avec une ponctuation naturelle et correcte.",
+                    "en": "Hello, this is a transcription with natural and correct punctuation.",
+                    "es": "Hola, esta es una transcripción con puntuación natural y correcta.",
+                    "de": "Hallo, dies ist eine Transkription mit natürlicher und korrekter Interpunktion.",
+                    "it": "Buongiorno, questa è una trascrizione con una punteggiatura naturale e corretta.",
+                    "pt": "Olá, esta é uma transcrição com pontuação natural e correta.",
+                    "nl": "Hallo, dit is een transcriptie met natuurlijke en correcte leestekens.",
+                    "pl": "Dzień dobry, to jest transkrypcja z naturalną i poprawną interpunkcją.",
+                    "ru": "Здравствуйте, это транскрипция с естественной и правильной пунктуацией.",
+                    "zh": "你好，这是一份带有自然且正确标点符号的转录文本。",
+                    "ja": "こんにちは、これは自然で正確な句読点を持つ文字起こしです。",
+                    "ko": "안녕하세요, 이것은 자연스럽고 올바른 구두점을 가진 전사입니다.",
+                    "ar": "مرحبًا، هذا تفريغ صوتي بعلامات ترقيم طبيعية وصحيحة.",
+                    "hi": "नमस्ते, यह प्राकृतिक और सही विराम चिह्नों के साथ एक प्रतिलेखन है।",
+                    "tr": "Merhaba, bu doğal ve doğru noktalama işaretlerine sahip bir transkripsiyondur.",
+                    "sv": "Hej, det här är en transkription med naturlig och korrekt interpunktion.",
+                    "da": "Hej, dette er en transkription med naturlig og korrekt tegnsætning.",
+                    "no": "Hei, dette er en transkripsjon med naturlig og riktig tegnsetting.",
+                    "fi": "Hei, tämä on transkriptio, jossa on luonnolliset ja oikeat välimerkit.",
+                    "cs": "Dobrý den, toto je přepis s přirozenou a správnou interpunkcí.",
+                    "el": "Γεια σας, αυτή είναι μια μεταγραφή με φυσική και σωστή στίξη.",
+                    "hu": "Üdvözlöm, ez egy természetes és helyes írásjelekkel ellátott átirat.",
+                    "ro": "Bună ziua, aceasta este o transcriere cu punctuație naturală și corectă.",
+                    "uk": "Вітаю, це транскрипція з природною та правильною пунктуацією.",
+                    "vi": "Xin chào, đây là bản phiên âm với dấu câu tự nhiên và chính xác.",
+                    "id": "Halo, ini adalah transkripsi dengan tanda baca yang alami dan benar.",
+                    "ms": "Helo, ini adalah transkripsi dengan tanda baca yang semula jadi dan betul.",
+                    "th": "สวัสดี นี่คือการถอดเสียงที่มีการเว้นวรรคตอนอย่างเป็นธรรมชาติและถูกต้อง"
+                }
+                prompt = prompts_by_lang.get(lang_iso, "Hello, this is a transcription with natural and correct punctuation.")
 
             if self.vocabulary_manager:
                 words = self.vocabulary_manager.get_words()
                 if words:
-                    if prompt:
-                        prompt += " Vocabulary: " + ", ".join(words) + "."
-                    else:
-                        prompt = ", ".join(words)
+                    prompt += " Vocabulary: " + ", ".join(words) + "."
 
             if len(prompt) > 500:
                 prompt = prompt[:500]
@@ -327,12 +354,33 @@ class TranscriptionService:
                 else:
                     result = getattr(transcription, "text", str(transcription)).strip()
 
-                word_count = len(re.findall(r'\w+', result))
-                if duration > 4.0 and word_count <= 2:
-                    result = ""
-
             if not result:
-                return "⚠️ Error: No audio or result detected (silence or noise)."
+                return ""
+
+            hallucinations_patterns = [
+                r"(?i)sous[\s-]*titrage\s+.*", r"(?i)sous-titres\s+réalisés\s+par.*", r"(?i)merci de votre attention\.?", r"(?i)radio-canada",
+                r"(?i)subtitles? by.*", r"(?i)captioned by.*", r"(?i)captions by.*", r"(?i)thanks for watching\.?", r"(?i)please subscribe\.?", r"(?i)subscribe to.*",
+                r"(?i)subtítulos\s+por.*", r"(?i)legendas\s+por.*", r"(?i)traducido\s+por.*", r"(?i)tradução\s+por.*",
+                r"(?i)untertitel\s+von.*", r"(?i)sottotitoli\s+di.*",
+                r"(?i)субтитры\s+.*", r"(?i)спасибо за просмотр\.?",
+                r"(?i)amara\.org", r"(?i)www\..*\.com"
+            ]
+            for pattern in hallucinations_patterns:
+                result = re.sub(pattern, '', result).strip()
+
+            isolated_hallucinations = {
+                "merci", "thank you", "thanks", "gracias", "danke", "grazie", 
+                "obrigado", "obrigada", "спасибо", "شكرا", "arigato", "xiexie", 
+                "kamsahamnida", "bye", "au revoir", "adios", "tschüss", "ciao", 
+                "oh", "ah", "hmm", "ooo", "mhm"
+            }
+            
+            clean_result = result.lower().strip('.,!? \t\n')
+            if clean_result in isolated_hallucinations and duration > 3.5:
+                result = ""
+                
+            if not result:
+                return ""
 
             if ui_preset == "Email Draft":
                 result = self._format_as_email(result, lang_iso)
