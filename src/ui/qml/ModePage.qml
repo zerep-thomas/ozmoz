@@ -561,8 +561,11 @@ Item {
                                 RowLayout {
                                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 6
                                     Text { text: "Active Mode"; color: "white"; font.pixelSize: 14; font.bold: true }
-                                    InfoIcon { tip: "Activate this mode to make it your current layout." }
-                                    Item { Layout.fillWidth: true }
+                                    InfoIcon { 
+                                        tip: "Activate this mode to make it your current layout."
+                                        Layout.topMargin: 2 
+                                    }
+                                    Item { Layout.fillWidth: true }                                    
                                     
                                     ToggleSwitch {
                                         checked: editingModeIndex === -1 ? (activeModeIndex === -1) : (activeModeIndex === editingModeIndex)
@@ -594,7 +597,10 @@ Item {
                                 RowLayout {
                                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 6
                                     Text { text: "Preset"; color: "white"; font.pixelSize: 14; font.bold: true }
-                                    InfoIcon { tip: "Select the type of task for which you want to use this mode" }
+                                     InfoIcon { 
+                                        tip: "Select the speech recognition model"
+                                        Layout.topMargin: 2 
+                                    }
                                     Item { Layout.fillWidth: true }
                                     
                                     Rectangle {

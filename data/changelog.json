@@ -1,8 +1,8 @@
 [
     {
-        "date": "Today",
-        "title": "Welcome",
-        "description": "Thank you for downloading Ozmoz, I hope you enjoy it!"
+        "date": "August 16",
+        "title": "Performance & Stability (v1.0.3)",
+        "description": "This release focuses on accuracy. The Equation mode has been enhanced, especially for the French language. We've also added noise filtering, anti-stuttering protections for local models, and a new 'Warm Mic' setting letting you choose between true zero-latency recording or hiding the Windows microphone icon."
     },
     {
         "date": "July 9",

@@ -17,7 +17,6 @@ log_file = os.path.join(
 
 from src.core.config import SECRET_PATTERNS
 
-
 class RedactSecretsFilter(logging.Filter):
     def filter(self, record):
         if isinstance(record.msg, str):
@@ -83,8 +82,7 @@ def set_windows11_titlebar_color(window, hex_color: str) -> None:
             hwnd, DWMWA_CAPTION_COLOR, ctypes.byref(ctypes.c_int(color_ref)), 4
         )
     except Exception:
-        logger.debug("Could not set Windows 11 titlebar color", exc_info=True)
-
+        pass
 
 def main() -> None:
     app = QApplication(sys.argv)
@@ -108,7 +106,7 @@ def main() -> None:
     changelog_manager = ChangelogManager()
     vocab_manager = VocabularyManager(event_bus)
 
-    audio_manager = AudioManager(app_state, sound_manager, event_bus, mode_manager, cred_manager)
+    audio_manager = AudioManager(app_state, sound_manager, event_bus, mode_manager, cred_manager, settings_manager)
     threading.Thread(target=audio_manager.initialize, daemon=True, name="AudioDriverWarmup").start()
 
     transcription_service = TranscriptionService(
