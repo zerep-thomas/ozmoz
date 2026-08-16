@@ -6,7 +6,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SETTINGS = {
     "play_sounds": True,
-    "auto_check_updates": True
+    "auto_check_updates": True,
+    "keep_mic_warm": False
 }
 
 class SettingsManager:

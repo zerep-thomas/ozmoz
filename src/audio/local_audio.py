@@ -51,7 +51,6 @@ class LocalWhisperManager:
     def __init__(self) -> None:
         root_dir = Path(__file__).resolve().parent.parent.parent
         self.base_models_directory: Path = root_dir / "data" / "models"
-
         self.model_instance: Optional[WhisperModel] = None
         self.is_loading: bool = False
         self._lock: threading.Lock = threading.Lock()
@@ -61,7 +60,6 @@ class LocalWhisperManager:
 
         try:
             self.base_models_directory.mkdir(parents=True, exist_ok=True)
-            logger.info("Models directory initialized: %s", self.base_models_directory)
         except Exception:
             logger.exception("Failed to create models directory")
 
@@ -77,7 +75,6 @@ class LocalWhisperManager:
             nvidia_path = Path(site_packages) / "nvidia"
             if not nvidia_path.exists():
                 return
-
             for root, dirs, _ in os.walk(nvidia_path):
                 root_path = Path(root)
                 if "bin" in dirs:
@@ -94,7 +91,6 @@ class LocalWhisperManager:
             self.has_cuda = ctypes.util.find_library("zlibwapi") is not None
         except Exception:
             self.has_cuda = False
-            logger.debug("Detect CUDA support failed", exc_info=True)
 
     def is_installed(self, model_name: str) -> bool:
         try:
@@ -107,20 +103,16 @@ class LocalWhisperManager:
                     return False
             return True
         except Exception:
-            logger.debug("is_installed failed to check", exc_info=True)
             return False
 
     def download(self, model_name: str, progress_callback=None) -> bool:
         if model_name not in MODELS_CONFIG:
-            logger.error("Unknown model: %s", model_name)
             return False
 
         with self._lock:
             if self.is_loading:
                 return False
             self.is_loading = True
-
-        logger.info("Starting download: %s", model_name)
 
         try:
             model_config = MODELS_CONFIG[model_name]
@@ -162,7 +154,6 @@ class LocalWhisperManager:
                     continue
 
                 existing_size = tmp_path.stat().st_size if tmp_path.exists() else 0
-
                 headers = {}
                 if existing_size > 0:
                     headers["Range"] = f"bytes={existing_size}-"
@@ -183,18 +174,13 @@ class LocalWhisperManager:
                         if chunk:
                             f.write(chunk)
                             downloaded_bytes += len(chunk)
-
                             if progress_callback and total_expected_bytes > 0:
                                 current_progress = min(downloaded_bytes / total_expected_bytes, 1.0)
                                 if current_progress - last_progress_emit >= 0.02 or current_progress == 1.0:
                                     progress_callback(current_progress)
                                     last_progress_emit = current_progress
-
                 os.replace(tmp_path, dest_path)
-
-            logger.info("Download completed: %s", model_name)
             return True
-
         except Exception:
             logger.exception("Download failed: %s", model_name)
             return False
@@ -204,7 +190,6 @@ class LocalWhisperManager:
 
     def load(self, model_name: str) -> bool:
         if not self.is_installed(model_name):
-            logger.warning("Cannot load, %s is not fully downloaded.", model_name)
             return False
 
         if self._current_loaded_model_name == model_name and self.model_instance is not None:
@@ -215,18 +200,14 @@ class LocalWhisperManager:
         self.setup_portable_cuda()
         model_dir = self._get_model_directory(model_name)
 
-        logger.info("Loading model into memory: %s", model_name)
-
         if self.has_cuda:
             try:
                 self.model_instance = WhisperModel(
                     str(model_dir), device="cuda", compute_type="float16", local_files_only=True
                 )
                 self._current_loaded_model_name = model_name
-                logger.info("Model loaded successfully on GPU (CUDA)")
                 return True
             except Exception:
-                logger.warning("CUDA failed, falling back to CPU", exc_info=True)
                 self.has_cuda = False
 
         try:
@@ -235,10 +216,8 @@ class LocalWhisperManager:
                 cpu_threads=CPU_INFERENCE_THREADS, local_files_only=True
             )
             self._current_loaded_model_name = model_name
-            logger.info("Model loaded successfully on CPU")
             return True
         except Exception:
-            logger.exception("Failed to load model on CPU")
             return False
 
     def transcribe(
@@ -248,7 +227,6 @@ class LocalWhisperManager:
         if not self.load(model_name):
             return "❌ Error: Local model not loaded."
 
-        logger.info("Local transcription in progress...")
         try:
             segments, info = self.model_instance.transcribe(
                 audio_file_path,
@@ -256,22 +234,29 @@ class LocalWhisperManager:
                 initial_prompt=prompt,
                 vad_filter=True,
                 vad_parameters={"min_silence_duration_ms": VAD_MIN_SILENCE_MS},
-                temperature=0.0
+                temperature=0.0,
+                condition_on_previous_text=False
             )
-            text = " ".join(segment.text for segment in segments).strip()
-            logger.info("Transcription result: %s...", text[:50])
-            return text
+            
+            valid_text = []
+            for segment in segments:
+                if getattr(segment, 'no_speech_prob', 0) > 0.6:
+                    continue
+                if getattr(segment, 'compression_ratio', 0) > 2.5:
+                    continue
+                if segment.text:
+                    valid_text.append(segment.text.strip())
+
+            return " ".join(valid_text).strip()
         except Exception:
             logger.exception("Internal transcription error")
             return "❌ Transcription error"
 
     def delete_model(self, model_name: str) -> bool:
         if model_name not in MODELS_CONFIG:
-            logger.error("Invalid or unconfigured model: %s", model_name)
             return False
 
         if self._current_loaded_model_name == model_name:
-            logger.info("Unloading model %s before deletion", model_name)
             self.model_instance = None
             self._current_loaded_model_name = None
             gc.collect()
@@ -280,11 +265,8 @@ class LocalWhisperManager:
             target_dir = self._get_model_directory(model_name)
             if target_dir.exists():
                 shutil.rmtree(target_dir)
-                logger.info("Model %s deleted successfully", model_name)
             return True
         except Exception:
-            logger.exception("Failed to delete %s", model_name)
             return False
-
 
 local_whisper = LocalWhisperManager()

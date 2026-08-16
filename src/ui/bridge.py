@@ -10,7 +10,6 @@ from src.core.system import global_executor
 
 logger = logging.getLogger(__name__)
 
-
 class UIBridge(QObject):
     activeChanged = Signal(bool)
     levelsChanged = Signal(list)
@@ -234,6 +233,15 @@ class UIBridge(QObject):
     def setPlaySounds(self, checked):
         if self.settings_manager:
             self.settings_manager.set("play_sounds", checked)
+
+    @Property(bool, notify=settingsChanged)
+    def keepMicWarm(self):
+        return self.settings_manager.get("keep_mic_warm", False) if self.settings_manager else False
+
+    @Slot(bool)
+    def setKeepMicWarm(self, checked):
+        if self.settings_manager:
+            self.settings_manager.set("keep_mic_warm", checked)
 
     @Property(bool, notify=settingsChanged)
     def autoCheckUpdates(self):

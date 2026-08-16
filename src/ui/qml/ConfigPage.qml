@@ -91,6 +91,7 @@ Item {
         property alias text: label.text
         property alias control: controlSlot.sourceComponent
         property bool showSeparator: true
+        property string infoTip: ""
 
         height: 42
         Layout.fillWidth: true
@@ -106,8 +107,20 @@ Item {
                 color: "white"
                 font.pixelSize: 14
                 font.weight: Font.Bold
-                Layout.fillWidth: true
+                Layout.fillWidth: rowRoot.infoTip === ""
                 verticalAlignment: Text.AlignVCenter
+            }
+
+            InfoIcon {
+                visible: rowRoot.infoTip !== ""
+                tip: rowRoot.infoTip
+                Layout.alignment: Qt.AlignVCenter
+                Layout.topMargin: 2
+            }
+
+            Item {
+                visible: rowRoot.infoTip !== ""
+                Layout.fillWidth: true
             }
 
             Loader {
@@ -155,12 +168,12 @@ Item {
                     anchors.topMargin: 16
                     spacing: 12
 
-                    // SECTION 1: SOUND
+                    // SECTION 1: SYSTEM
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 6
 
-                        Text { text: "Sound"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
+                        Text { text: "System"; color: "white"; font.pixelSize: 13; font.bold: true; Layout.leftMargin: 4 }
 
                         Rectangle {
                             Layout.fillWidth: true
@@ -168,20 +181,30 @@ Item {
                             radius: 12
                             border.color: "#66696a"
                             border.width: 1
-                            implicitHeight: soundColumn.implicitHeight + 2
+                            implicitHeight: sysColumn.implicitHeight + 2
 
                             ColumnLayout {
-                                id: soundColumn
+                                id: sysColumn
                                 anchors.fill: parent
                                 anchors.margins: 1
                                 spacing: 0
 
                                 SettingRow {
                                     text: "Play usage sounds"
-                                    showSeparator: false
+                                    showSeparator: true
                                     control: ToggleSwitch {
                                         checked: uiBridge.playSounds
                                         onToggled: function(checked) { uiBridge.setPlaySounds(checked) }
+                                    }
+                                }
+
+                                SettingRow {
+                                    text: "Keep microphone always active"
+                                    infoTip: "Keeps the microphone active for instant zero-latency recording. Turn off to hide the Windows microphone indicator when not recording (adds ~0.5s delay when you start)."
+                                    showSeparator: false
+                                    control: ToggleSwitch {
+                                        checked: uiBridge.keepMicWarm
+                                        onToggled: function(checked) { uiBridge.setKeepMicWarm(checked) }
                                     }
                                 }
                             }
@@ -383,9 +406,10 @@ Item {
                                         TextInput {
                                             id: groqKeyInput
                                             anchors.left: parent.left
-                                            anchors.right: innerSaveBtn.left
+                                            anchors.leftMargin: 8
+                                            anchors.right: innerSaveBtn.visible ? innerSaveBtn.left : parent.right
+                                            anchors.rightMargin: 8
                                             anchors.verticalCenter: parent.verticalCenter
-                                            anchors.margins: 8
                                             color: "white"
                                             font.pixelSize: 13
                                             echoMode: TextInput.Password

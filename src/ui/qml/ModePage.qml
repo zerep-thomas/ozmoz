@@ -146,7 +146,7 @@ Item {
 
     readonly property var presets: [
         { name: "Voice to text", icon: "icons/voice2text.svg", tag: "", tip: "Simply to transcribe what you say into text", requireKey: false },
-        { name: "Email Draft", icon: "icons/email.svg", tag: "", tip: "Automatically format your speech into a ready-to-send email", requireKey: false },
+        { name: "Email Draft", icon: "icons/email.svg", tag: "", tip: "Convert your voice into a professional email draft. Requires Groq API Key.", requireKey: true },
         { name: "Equation", icon: "icons/equation.svg", tag: "LaTeX", tip: "Convert your voice into LaTeX equations. Requires Groq API Key.", requireKey: true }
     ]
 
@@ -561,8 +561,11 @@ Item {
                                 RowLayout {
                                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 6
                                     Text { text: "Active Mode"; color: "white"; font.pixelSize: 14; font.bold: true }
-                                    InfoIcon { tip: "Activate this mode to make it your current layout." }
-                                    Item { Layout.fillWidth: true }
+                                    InfoIcon { 
+                                        tip: "Activate this mode to make it your current layout."
+                                        Layout.topMargin: 2 
+                                    }
+                                    Item { Layout.fillWidth: true }                                    
                                     
                                     ToggleSwitch {
                                         checked: editingModeIndex === -1 ? (activeModeIndex === -1) : (activeModeIndex === editingModeIndex)
@@ -594,7 +597,10 @@ Item {
                                 RowLayout {
                                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 6
                                     Text { text: "Preset"; color: "white"; font.pixelSize: 14; font.bold: true }
-                                    InfoIcon { tip: "Select the type of task for which you want to use this mode" }
+                                     InfoIcon { 
+                                        tip: "Select the type of task for which you want to use this mode."
+                                        Layout.topMargin: 2 
+                                    }
                                     Item { Layout.fillWidth: true }
                                     
                                     Rectangle {
@@ -660,7 +666,10 @@ Item {
                                 RowLayout {
                                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 6
                                     Text { text: "Voice Model"; color: "white"; font.pixelSize: 14; font.bold: true }
-                                    InfoIcon { tip: "Select the speech recognition model" }
+                                    InfoIcon { 
+                                        tip: "Select the speech recognition model."
+                                        Layout.topMargin: 2 
+                                    }
                                     Item { Layout.fillWidth: true }
                                     Rectangle {
                                         id: voiceBtn
@@ -1415,7 +1424,7 @@ Item {
             }
         }
     }
-    // ── EQUATION API KEY REQUIRED MODAL ──
+    // ── ADVANCED API KEY REQUIRED MODAL ──
     Item {
         id: equationKeyModalOverlay
         anchors.fill: parent; z: 300
@@ -1442,7 +1451,7 @@ Item {
                 Text { text: "API Key Required"; color: "white"; font.pixelSize: 16; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                 
                 Text {
-                    text: "To use the Equation mode (LaTeX generation), you need to provide a Groq API key in the settings."
+                    text: "To use advanced modes (like Equation or Email Draft), you need to provide a Groq API key in the settings."
                     color: "#b0b0b0"; font.pixelSize: 13; wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter
                     Layout.fillWidth: true; Layout.topMargin: 10
                 }

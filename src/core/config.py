@@ -27,7 +27,7 @@ SECRET_PATTERNS = [
 
 
 class AppConfig:
-    VERSION: str = "1.0.2"
+    VERSION: str = "1.0.3"
     GITHUB_RELEASES_URL: str = "https://api.github.com/repos/zerep-thomas/ozmoz/releases/latest"
     AUDIO_CHUNK: int = AUDIO_CHUNK_SIZE
     AUDIO_FORMAT: int = AUDIO_BIT_FORMAT
